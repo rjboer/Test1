@@ -4,6 +4,7 @@
         const toolbar = document.getElementById('toolbar');
         const status = document.getElementById('status');
         const meta = document.getElementById('board-meta');
+        let activeEditor = null;
 
         const state = {
                 boardId: window.initialBoardID,
@@ -102,23 +103,19 @@
                 const world = toWorld(e);
                 const note = hitNote(world);
                 if (note) {
-                        const updated = prompt('Edit sticky note', note.content);
-                        if (updated !== null) {
-                                note.content = updated;
+                        openNoteEditor(note.position, note.content, note, true, () => {
                                 syncBoard();
                                 render();
-                        }
+                        });
                         return;
                 }
 
                 const text = hitText(world);
                 if (text) {
-                        const updated = prompt('Edit text', text.content);
-                        if (updated !== null) {
-                                text.content = updated;
+                        openTextEditor(text.position, text.content, text, true, () => {
                                 syncBoard();
                                 render();
-                        }
+                        });
                 }
         });
 
@@ -408,18 +405,20 @@
                         state.board.connectors.push(makeConnector(state.drawing.start, world));
                         break;
                 case 'text': {
-                        const content = prompt('Enter text');
-                        if (content) {
-                                state.board.texts.push(makeText(content, world));
-                        }
-                        break;
+                        openTextEditor(world, '', null, false, () => {
+                                render();
+                                syncBoard();
+                        });
+                        render();
+                        return;
                 }
                 case 'note': {
-                        const content = prompt('Sticky note');
-                        if (content) {
-                                state.board.notes.push(makeNote(content, world));
-                        }
-                        break;
+                        openNoteEditor(world, '', null, false, () => {
+                                render();
+                                syncBoard();
+                        });
+                        render();
+                        return;
                 }
                 }
                 render();
@@ -466,6 +465,103 @@
                         width: 180,
                         height: 120,
                 };
+        }
+
+        function worldToPage(point) {
+                const pt = toScreenPoint(point);
+                const rect = canvas.getBoundingClientRect();
+                return { x: rect.left + pt.x, y: rect.top + pt.y };
+        }
+
+        function hideEditor() {
+                if (activeEditor) {
+                        activeEditor.remove();
+                        activeEditor = null;
+                }
+        }
+
+        function openOverlay(kind, world, initialValue, options, onSave) {
+                hideEditor();
+                const opts = options || {};
+                const el = document.createElement(kind === 'note' ? 'textarea' : 'input');
+                el.value = initialValue || '';
+                el.placeholder = opts.placeholder || '';
+                el.style.position = 'absolute';
+                el.style.padding = '8px 10px';
+                el.style.border = '1px solid #9ca3af';
+                el.style.borderRadius = '8px';
+                el.style.boxShadow = '0 10px 30px rgba(0, 0, 0, 0.25)';
+                el.style.background = 'rgba(255, 255, 255, 0.96)';
+                el.style.color = '#111827';
+                el.style.fontFamily = '"Inter", sans-serif';
+                el.style.fontSize = `${(opts.fontSize || 16) * state.scale}px`;
+                el.style.zIndex = '30';
+                el.style.minWidth = `${(opts.width || 200) * state.scale}px`;
+                el.style.outline = 'none';
+                el.style.resize = kind === 'note' ? 'both' : 'none';
+                if (opts.height) {
+                        el.style.height = `${opts.height * state.scale}px`;
+                }
+                const page = worldToPage(world);
+                const offsetY = opts.offsetY ? opts.offsetY * state.scale : 0;
+                el.style.left = `${page.x}px`;
+                el.style.top = `${page.y - offsetY}px`;
+
+                const finalize = (shouldCommit = true) => {
+                        if (!activeEditor || el !== activeEditor) return;
+                        hideEditor();
+                        if (!shouldCommit) return;
+                        const value = el.value;
+                        if (!opts.allowEmpty && !value.trim()) return;
+                        onSave(value);
+                };
+
+                el.addEventListener('keydown', (evt) => {
+                        if (evt.key === 'Enter' && !(kind === 'note' && evt.shiftKey)) {
+                                evt.preventDefault();
+                                finalize(true);
+                        } else if (evt.key === 'Escape') {
+                                evt.preventDefault();
+                                finalize(false);
+                        }
+                });
+
+                el.addEventListener('blur', () => finalize(true));
+
+                document.body.appendChild(el);
+                activeEditor = el;
+                el.focus();
+                el.select();
+        }
+
+        function openTextEditor(position, initialContent, existing, allowEmpty, onDone) {
+                const fontSize = (existing && existing.fontSize) || 18;
+                openOverlay('text', position, initialContent, { fontSize, offsetY: fontSize, allowEmpty }, (value) => {
+                        if (existing) {
+                                existing.content = value;
+                        } else {
+                                state.board.texts.push(makeText(value, position));
+                        }
+                        onDone();
+                });
+        }
+
+        function openNoteEditor(position, initialContent, existing, allowEmpty, onDone) {
+                const width = (existing && existing.width) || 180;
+                const height = (existing && existing.height) || 120;
+                openOverlay('note', position, initialContent, {
+                        fontSize: 14,
+                        width,
+                        height,
+                        allowEmpty,
+                }, (value) => {
+                        if (existing) {
+                                existing.content = value;
+                        } else {
+                                state.board.notes.push(makeNote(value, position));
+                        }
+                        onDone();
+                });
         }
 
         async function syncBoard() {
