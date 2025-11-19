@@ -23,6 +23,7 @@
                 },
                 cursors: new Map(),
                 lastCursorSent: 0,
+                strokeSettings: { width: 3, smoothing: 0.45 },
         };
 
         function pickColor() {
@@ -70,7 +71,12 @@
                         return;
                 }
                 if (e.button !== 0) return;
-                state.drawing = { start: world, current: world };
+                if (state.tool === 'pen') {
+                        state.drawing = startStroke(world);
+                        render();
+                        return;
+                }
+                state.drawing = { tool: state.tool, start: world, current: world };
         });
 
         canvas.addEventListener('mousemove', (e) => {
@@ -89,8 +95,13 @@
                         state.offset = { x: state.pan.startOffset.x + dx, y: state.pan.startOffset.y + dy };
                         render();
                 } else if (state.drawing) {
-                        state.drawing.current = world;
-                        render();
+                        if (state.drawing.tool === 'pen') {
+                                recordStrokePoint(state.drawing, world);
+                                render();
+                        } else {
+                                state.drawing.current = world;
+                                render();
+                        }
                 }
 
                 maybeSendCursor(world);
@@ -105,7 +116,11 @@
                         return;
                 }
                 if (state.drawing) {
-                        completeDrawing(world);
+                        if (state.drawing.tool === 'pen') {
+                                finalizeStroke(state.drawing);
+                        } else {
+                                completeDrawing(world, state.drawing);
+                        }
                         state.drawing = null;
                 }
         });
@@ -174,6 +189,7 @@
                 return {
                         ...board,
                         shapes: board.shapes || [],
+                        strokes: board.strokes || [],
                         texts: board.texts || [],
                         notes: board.notes || [],
                         connectors: board.connectors || [],
@@ -222,7 +238,7 @@
         function renderMeta() {
                 if (!state.board) return;
                 const updated = new Date(state.board.updatedAt).toLocaleTimeString();
-                meta.innerHTML = `ID: ${state.board.id}<br/>Name: ${state.board.name}<br/>Shapes: ${state.board.shapes.length}<br/>Notes: ${state.board.notes.length}<br/>Texts: ${state.board.texts.length}<br/>Connectors: ${state.board.connectors.length}<br/>Updated: ${updated}`;
+                meta.innerHTML = `ID: ${state.board.id}<br/>Name: ${state.board.name}<br/>Shapes: ${state.board.shapes.length}<br/>Strokes: ${state.board.strokes.length}<br/>Notes: ${state.board.notes.length}<br/>Texts: ${state.board.texts.length}<br/>Connectors: ${state.board.connectors.length}<br/>Updated: ${updated}`;
         }
 
         function render() {
@@ -238,6 +254,7 @@
 
                 state.board.connectors.forEach(drawConnector);
                 state.board.shapes.forEach(drawShape);
+                state.board.strokes.forEach(drawStroke);
                 state.board.notes.forEach(drawNote);
                 state.board.texts.forEach(drawText);
                 drawCursors();
@@ -289,6 +306,33 @@
                         ctx.fill();
                         ctx.stroke();
                 }
+                ctx.restore();
+        }
+
+        function drawStroke(stroke) {
+                if (!stroke.points || stroke.points.length < 2) return;
+                const color = stroke.color || '#f472b6';
+                const width = Math.max(1, (stroke.width || 3) * state.scale);
+                const smoothing = isNaN(stroke.smoothing) ? 0.5 : stroke.smoothing;
+                const points = stroke.points.map(toScreenPoint);
+
+                ctx.save();
+                ctx.strokeStyle = color;
+                ctx.lineWidth = width;
+                ctx.lineJoin = 'round';
+                ctx.lineCap = 'round';
+
+                ctx.beginPath();
+                ctx.moveTo(points[0].x, points[0].y);
+                for (let i = 1; i < points.length; i++) {
+                        const prev = points[i - 1];
+                        const curr = points[i];
+                        const mid = blend(prev, curr, smoothing);
+                        ctx.quadraticCurveTo(prev.x, prev.y, mid.x, mid.y);
+                }
+                const last = points[points.length - 1];
+                ctx.lineTo(last.x, last.y);
+                ctx.stroke();
                 ctx.restore();
         }
 
@@ -380,13 +424,20 @@
         }
 
         function drawPreview(drawing) {
+                if (drawing.tool === 'pen') {
+                        ctx.save();
+                        ctx.globalAlpha = 0.7;
+                        drawStroke(drawing);
+                        ctx.restore();
+                        return;
+                }
                 const start = toScreenPoint(drawing.start);
                 const end = toScreenPoint(drawing.current);
                 ctx.save();
                 ctx.setLineDash([6, 4]);
                 ctx.strokeStyle = '#9ca3af';
                 ctx.lineWidth = 1;
-                if (state.tool === 'rectangle' || state.tool === 'ellipse' || state.tool === 'connector') {
+                if (drawing.tool === 'rectangle' || drawing.tool === 'ellipse' || drawing.tool === 'connector') {
                         ctx.beginPath();
                         ctx.rect(Math.min(start.x, end.x), Math.min(start.y, end.y), Math.abs(end.x - start.x), Math.abs(end.y - start.y));
                         ctx.stroke();
@@ -441,6 +492,11 @@
                 return Math.sqrt(dx * dx + dy * dy);
         }
 
+        function blend(a, b, t) {
+                const amount = clamp(isNaN(t) ? 0.5 : t, 0, 1);
+                return { x: a.x + (b.x - a.x) * amount, y: a.y + (b.y - a.y) * amount };
+        }
+
         function snapToAnchor(point) {
                 const SNAP_DISTANCE = 32;
                 if (!state.board || !state.board.shapes.length) {
@@ -477,16 +533,52 @@
                 return anchor;
         }
 
-        function completeDrawing(world) {
-                switch (state.tool) {
+        function startStroke(point) {
+                return {
+                        tool: 'pen',
+                        points: [point],
+                        color: state.myCursor.color,
+                        width: state.strokeSettings.width,
+                        smoothing: state.strokeSettings.smoothing,
+                };
+        }
+
+        function recordStrokePoint(drawing, point) {
+                if (!drawing.points || drawing.points.length === 0) return;
+                const last = drawing.points[drawing.points.length - 1];
+                const smoothing = clamp(isNaN(drawing.smoothing) ? 0.5 : drawing.smoothing, 0, 1);
+                const blended = {
+                        x: last.x + (point.x - last.x) * (1 - smoothing),
+                        y: last.y + (point.y - last.y) * (1 - smoothing),
+                };
+                if (distance(blended, last) < 0.5) return;
+                drawing.points.push(blended);
+        }
+
+        function finalizeStroke(drawing) {
+                if (!drawing || drawing.points.length < 2) return;
+                state.board.strokes.push({
+                        id: uid(),
+                        points: drawing.points.slice(),
+                        color: drawing.color || state.myCursor.color,
+                        width: drawing.width || state.strokeSettings.width,
+                        smoothing: drawing.smoothing,
+                });
+                render();
+                syncBoard();
+        }
+
+        function completeDrawing(world, drawing) {
+                const tool = drawing?.tool || state.tool;
+                switch (tool) {
                 case 'rectangle':
-                        state.board.shapes.push(makeShape('rectangle', state.drawing.start, world));
+                        state.board.shapes.push(makeShape('rectangle', drawing.start, world));
                         break;
                 case 'ellipse':
-                        state.board.shapes.push(makeShape('ellipse', state.drawing.start, world));
+                        state.board.shapes.push(makeShape('ellipse', drawing.start, world));
                         break;
                 case 'connector':
-                        state.board.connectors.push(makeConnector(state.drawing.start, world));
+                        state.board.connectors.push(makeConnector(drawing.start, world));
                         break;
                 case 'text': {
                         openTextEditor(world, '', null, false, () => {
