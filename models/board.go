@@ -55,6 +55,15 @@ type StickyNote struct {
 	Height   float64 `json:"height"`
 }
 
+// Comment represents a pin containing a comment or reaction.
+type Comment struct {
+	ID       string `json:"id"`
+	Position Point  `json:"position"`
+	Author   string `json:"author"`
+	Content  string `json:"content"`
+	Type     string `json:"type"`
+}
+
 // Cursor represents a participant's pointer on the board.
 type Cursor struct {
 	ID       string `json:"id"`
@@ -72,6 +81,7 @@ type Board struct {
 	Texts      []TextItem   `json:"texts"`
 	Notes      []StickyNote `json:"notes"`
 	Connectors []Connector  `json:"connectors"`
+	Comments   []Comment    `json:"comments"`
 	UpdatedAt  time.Time    `json:"updatedAt"`
 }
 
