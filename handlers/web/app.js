@@ -11,7 +11,7 @@
                 tool: 'pan',
                 scale: 1,
                 offset: { x: 0, y: 0 },
-                pan: { active: false, origin: null, startOffset: null },
+                pan: { active: false, origin: null, startOffset: null, button: null },
                 drawing: null,
                 eventSource: null,
                 myCursor: {
@@ -50,14 +50,25 @@
                 setStatus(`Tool: ${state.tool}`);
         });
 
+        canvas.addEventListener('contextmenu', (e) => {
+                e.preventDefault();
+        });
+
         canvas.addEventListener('mousedown', (e) => {
                 if (!state.board) return;
                 const world = toWorld(e);
-                if (state.tool === 'pan') {
-                        state.pan = { active: true, origin: { x: e.clientX, y: e.clientY }, startOffset: { ...state.offset } };
+                const rightButton = e.button === 2;
+                if (rightButton || state.tool === 'pan') {
+                        state.pan = {
+                                active: true,
+                                button: e.button,
+                                origin: { x: e.clientX, y: e.clientY },
+                                startOffset: { ...state.offset },
+                        };
                         setStatus('Panning');
                         return;
                 }
+                if (e.button !== 0) return;
                 state.drawing = { start: world, current: world };
         });
 
@@ -66,6 +77,12 @@
                 const world = toWorld(e);
 
                 if (state.pan.active) {
+                        const requiredButton = state.pan.button === 2 ? 2 : 1;
+                        if ((e.buttons & requiredButton) === 0) {
+                                state.pan = { active: false, origin: null, startOffset: null, button: null };
+                                setStatus('Ready');
+                                return;
+                        }
                         const dx = e.clientX - state.pan.origin.x;
                         const dy = e.clientY - state.pan.origin.y;
                         state.offset = { x: state.pan.startOffset.x + dx, y: state.pan.startOffset.y + dy };
@@ -81,8 +98,8 @@
         canvas.addEventListener('mouseup', (e) => {
                 if (!state.board) return;
                 const world = toWorld(e);
-                if (state.pan.active) {
-                        state.pan.active = false;
+                if (state.pan.active && (state.pan.button === e.button || e.buttons === 0)) {
+                        state.pan = { active: false, origin: null, startOffset: null, button: null };
                         setStatus('Ready');
                         return;
                 }
@@ -93,7 +110,10 @@
         });
 
         canvas.addEventListener('mouseleave', () => {
-                state.pan.active = false;
+                if (state.pan.active) {
+                        state.pan = { active: false, origin: null, startOffset: null, button: null };
+                        setStatus('Ready');
+                }
                 state.drawing = null;
         });
 
