@@ -37,6 +37,8 @@ func New(store BoardStore, events EventBroadcaster, logger *log.Logger) *Handler
 
 // RegisterRoutes attaches handler functions to the provided ServeMux.
 func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
+	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.FS(staticFS))))
+	mux.HandleFunc("/", h.serveIndex)
 	mux.HandleFunc("/boards", h.handleBoards)
 	mux.HandleFunc("/boards/", h.handleBoardByID)
 }
@@ -61,13 +63,23 @@ func (h *Handler) handleBoardByID(w http.ResponseWriter, r *http.Request) {
 	}
 	boardID := parts[0]
 
-	if len(parts) > 1 && parts[1] == "events" {
-		if r.Method != http.MethodGet {
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	if len(parts) > 1 {
+		switch parts[1] {
+		case "events":
+			if r.Method != http.MethodGet {
+				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			h.streamBoardEvents(w, r, boardID)
+			return
+		case "cursor":
+			if r.Method != http.MethodPost {
+				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			h.cursorUpdate(w, r, boardID)
 			return
 		}
-		h.streamBoardEvents(w, r, boardID)
-		return
 	}
 
 	switch r.Method {
@@ -133,6 +145,27 @@ func (h *Handler) deleteBoard(w http.ResponseWriter, r *http.Request, id string)
 	}
 	h.broadcastBoardEvent(id, "board.deleted", map[string]string{"id": id})
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *Handler) cursorUpdate(w http.ResponseWriter, r *http.Request, boardID string) {
+	if _, ok := h.store.GetBoard(boardID); !ok {
+		http.NotFound(w, r)
+		return
+	}
+
+	var cursor models.Cursor
+	if err := json.NewDecoder(r.Body).Decode(&cursor); err != nil {
+		http.Error(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if cursor.ID == "" {
+		http.Error(w, "cursor id required", http.StatusBadRequest)
+		return
+	}
+
+	h.broadcastBoardEvent(boardID, "cursor.moved", cursor)
+	w.WriteHeader(http.StatusAccepted)
 }
 
 func (h *Handler) streamBoardEvents(w http.ResponseWriter, r *http.Request, boardID string) {

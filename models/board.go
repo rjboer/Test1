@@ -17,6 +17,16 @@ type Shape struct {
 	StrokeWidth float64 `json:"strokeWidth"`
 }
 
+// Connector represents a link between two points on the board.
+type Connector struct {
+	ID    string  `json:"id"`
+	From  Point   `json:"from"`
+	To    Point   `json:"to"`
+	Color string  `json:"color"`
+	Width float64 `json:"width"`
+	Label string  `json:"label"`
+}
+
 // TextItem represents a text element on the board.
 type TextItem struct {
 	ID       string `json:"id"`
@@ -36,14 +46,23 @@ type StickyNote struct {
 	Height   float64 `json:"height"`
 }
 
+// Cursor represents a participant's pointer on the board.
+type Cursor struct {
+	ID       string `json:"id"`
+	Label    string `json:"label"`
+	Color    string `json:"color"`
+	Position Point  `json:"position"`
+}
+
 // Board is the aggregate of all collaborative items.
 type Board struct {
-	ID        string       `json:"id"`
-	Name      string       `json:"name"`
-	Shapes    []Shape      `json:"shapes"`
-	Texts     []TextItem   `json:"texts"`
-	Notes     []StickyNote `json:"notes"`
-	UpdatedAt time.Time    `json:"updatedAt"`
+	ID         string       `json:"id"`
+	Name       string       `json:"name"`
+	Shapes     []Shape      `json:"shapes"`
+	Texts      []TextItem   `json:"texts"`
+	Notes      []StickyNote `json:"notes"`
+	Connectors []Connector  `json:"connectors"`
+	UpdatedAt  time.Time    `json:"updatedAt"`
 }
 
 // BoardEvent represents a message sent to subscribers about a board.
