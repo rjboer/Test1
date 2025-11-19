@@ -69,6 +69,10 @@
                         setStatus('Panning');
                         return;
                 }
+                if (state.tool === 'comment' && e.button === 0) {
+                        handleComment(world);
+                        return;
+                }
                 if (e.button !== 0) return;
                 state.drawing = { start: world, current: world };
         });
@@ -177,6 +181,7 @@
                         texts: board.texts || [],
                         notes: board.notes || [],
                         connectors: board.connectors || [],
+                        comments: board.comments || [],
                 };
         }
 
@@ -222,7 +227,7 @@
         function renderMeta() {
                 if (!state.board) return;
                 const updated = new Date(state.board.updatedAt).toLocaleTimeString();
-                meta.innerHTML = `ID: ${state.board.id}<br/>Name: ${state.board.name}<br/>Shapes: ${state.board.shapes.length}<br/>Notes: ${state.board.notes.length}<br/>Texts: ${state.board.texts.length}<br/>Connectors: ${state.board.connectors.length}<br/>Updated: ${updated}`;
+                meta.innerHTML = `ID: ${state.board.id}<br/>Name: ${state.board.name}<br/>Shapes: ${state.board.shapes.length}<br/>Notes: ${state.board.notes.length}<br/>Texts: ${state.board.texts.length}<br/>Connectors: ${state.board.connectors.length}<br/>Comments: ${state.board.comments.length}<br/>Updated: ${updated}`;
         }
 
         function render() {
@@ -240,6 +245,7 @@
                 state.board.shapes.forEach(drawShape);
                 state.board.notes.forEach(drawNote);
                 state.board.texts.forEach(drawText);
+                state.board.comments.forEach(drawCommentPin);
                 drawCursors();
 
                 if (state.drawing) {
@@ -357,6 +363,35 @@
                 ctx.fillStyle = item.color || '#e5e7eb';
                 ctx.font = `${(item.fontSize || 16) * state.scale}px "Inter", sans-serif`;
                 ctx.fillText(item.content || 'Text', pos.x, pos.y);
+                ctx.restore();
+        }
+
+        function drawCommentPin(comment) {
+                const pos = toScreenPoint(comment.position);
+                const radius = 10;
+                const icon = comment.type === 'reaction' ? (comment.content || '👍') : '💬';
+
+                ctx.save();
+                ctx.fillStyle = comment.type === 'reaction' ? '#f472b6' : '#60a5fa';
+                ctx.strokeStyle = '#0b1224';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.arc(pos.x, pos.y, radius, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.stroke();
+
+                ctx.fillStyle = '#0b1224';
+                ctx.font = '12px "Inter"';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(icon.substring(0, 2), pos.x, pos.y);
+
+                if (comment.author) {
+                        ctx.textAlign = 'left';
+                        ctx.fillStyle = '#e5e7eb';
+                        ctx.fillText(comment.author, pos.x + radius + 6, pos.y + 4);
+                }
+
                 ctx.restore();
         }
 
@@ -509,6 +544,15 @@
                 syncBoard();
         }
 
+        function handleComment(world) {
+                const target = hitComment(world);
+                if (target) {
+                        openCommentEditor(target.position, target);
+                        return;
+                }
+                openCommentEditor(world, null);
+        }
+
         function makeShape(kind, start, end) {
                 return {
                         id: uid(),
@@ -548,6 +592,16 @@
                         color: '#fcd34d',
                         width: 180,
                         height: 120,
+                };
+        }
+
+        function makeComment(position, content, type) {
+                return {
+                        id: uid(),
+                        position,
+                        author: state.myCursor.label || 'You',
+                        content,
+                        type: type || 'comment',
                 };
         }
 
@@ -616,6 +670,138 @@
                 activeEditor = el;
                 el.focus();
                 el.select();
+        }
+
+        function openCommentEditor(position, existing) {
+                hideEditor();
+                const wrapper = document.createElement('div');
+                wrapper.style.position = 'absolute';
+                wrapper.style.padding = '10px';
+                wrapper.style.background = 'rgba(255, 255, 255, 0.98)';
+                wrapper.style.border = '1px solid #9ca3af';
+                wrapper.style.borderRadius = '10px';
+                wrapper.style.boxShadow = '0 12px 30px rgba(0, 0, 0, 0.25)';
+                wrapper.style.width = '260px';
+                wrapper.style.zIndex = '35';
+
+                const title = document.createElement('div');
+                title.textContent = existing ? 'Edit pin' : 'New pin';
+                title.style.fontWeight = '600';
+                title.style.marginBottom = '8px';
+                wrapper.appendChild(title);
+
+                const typeLabel = document.createElement('label');
+                typeLabel.textContent = 'Type';
+                typeLabel.style.display = 'block';
+                typeLabel.style.fontSize = '12px';
+                typeLabel.style.marginBottom = '4px';
+                wrapper.appendChild(typeLabel);
+
+                const select = document.createElement('select');
+                ['comment', 'reaction'].forEach((kind) => {
+                        const opt = document.createElement('option');
+                        opt.value = kind;
+                        opt.textContent = kind.charAt(0).toUpperCase() + kind.slice(1);
+                        select.appendChild(opt);
+                });
+                select.value = existing?.type || 'comment';
+                select.style.marginBottom = '8px';
+                select.style.width = '100%';
+                select.style.padding = '6px';
+                wrapper.appendChild(select);
+
+                const textarea = document.createElement('textarea');
+                textarea.placeholder = 'Add comment or emoji…';
+                textarea.value = existing?.content || '';
+                textarea.style.width = '100%';
+                textarea.style.height = '80px';
+                textarea.style.boxSizing = 'border-box';
+                textarea.style.padding = '8px';
+                textarea.style.marginBottom = '8px';
+                textarea.style.fontFamily = '"Inter", sans-serif';
+                wrapper.appendChild(textarea);
+
+                const actions = document.createElement('div');
+                actions.style.display = 'flex';
+                actions.style.justifyContent = 'space-between';
+                actions.style.gap = '8px';
+
+                const save = document.createElement('button');
+                save.textContent = existing ? 'Save' : 'Add';
+                save.style.flex = '1';
+
+                const cancel = document.createElement('button');
+                cancel.textContent = 'Cancel';
+                cancel.type = 'button';
+                cancel.style.flex = '1';
+
+                const remove = document.createElement('button');
+                remove.textContent = 'Delete';
+                remove.style.flex = '1';
+                remove.style.background = '#ef4444';
+                remove.style.color = '#fff';
+                remove.style.display = existing ? 'block' : 'none';
+
+                actions.appendChild(cancel);
+                actions.appendChild(save);
+                actions.appendChild(remove);
+                wrapper.appendChild(actions);
+
+                const commit = () => {
+                        const content = textarea.value.trim();
+                        if (!content) {
+                                hideEditor();
+                                return;
+                        }
+                        const type = select.value || 'comment';
+                        if (existing) {
+                                existing.content = content;
+                                existing.type = type;
+                                existing.author = existing.author || state.myCursor.label || 'You';
+                        } else {
+                                state.board.comments.push(makeComment(position, content, type));
+                        }
+                        hideEditor();
+                        render();
+                        syncBoard();
+                };
+
+                const destroy = () => {
+                        if (!existing) return;
+                        state.board.comments = state.board.comments.filter((c) => c.id !== existing.id);
+                        hideEditor();
+                        render();
+                        syncBoard();
+                };
+
+                save.addEventListener('click', (evt) => {
+                        evt.stopPropagation();
+                        commit();
+                });
+                cancel.addEventListener('click', (evt) => {
+                        evt.stopPropagation();
+                        hideEditor();
+                });
+                remove.addEventListener('click', (evt) => {
+                        evt.stopPropagation();
+                        destroy();
+                });
+                textarea.addEventListener('keydown', (evt) => {
+                        if ((evt.metaKey || evt.ctrlKey) && evt.key === 'Enter') {
+                                commit();
+                        } else if (evt.key === 'Escape') {
+                                hideEditor();
+                        }
+                });
+                wrapper.addEventListener('mousedown', (evt) => evt.stopPropagation());
+
+                const page = worldToPage(position);
+                wrapper.style.left = `${page.x}px`;
+                wrapper.style.top = `${page.y}px`;
+
+                document.body.appendChild(wrapper);
+                activeEditor = wrapper;
+                textarea.focus();
         }
 
         function openTextEditor(position, initialContent, existing, allowEmpty, onDone) {
@@ -726,6 +912,15 @@
                         const width = (text.content?.length || 4) * (text.fontSize || 16) * 0.55;
                         const height = (text.fontSize || 16);
                         return world.x >= text.position.x && world.x <= text.position.x + width && world.y >= text.position.y - height && world.y <= text.position.y + 4;
+                });
+        }
+
+        function hitComment(world) {
+                const screenPoint = toScreenPoint(world);
+                const radius = 14;
+                return state.board.comments.find((comment) => {
+                        const pin = toScreenPoint(comment.position);
+                        return distance(screenPoint, pin) <= radius;
                 });
         }
 
