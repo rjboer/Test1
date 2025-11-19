@@ -293,8 +293,10 @@
         }
 
         function drawConnector(conn) {
-                const start = toScreenPoint(conn.from);
-                const end = toScreenPoint(conn.to);
+                const startWorld = resolveAnchor(conn.from) || conn.from;
+                const endWorld = resolveAnchor(conn.to) || conn.to;
+                const start = toScreenPoint(startWorld);
+                const end = toScreenPoint(endWorld);
                 ctx.save();
                 ctx.strokeStyle = conn.color || '#fbbf24';
                 ctx.lineWidth = Math.max(1, (conn.width || 2) * state.scale);
@@ -413,6 +415,68 @@
                 };
         }
 
+        function getShapeBounds(shape) {
+                const [a, b] = shape.points;
+                const left = Math.min(a.x, b.x);
+                const right = Math.max(a.x, b.x);
+                const top = Math.min(a.y, b.y);
+                const bottom = Math.max(a.y, b.y);
+                return { left, right, top, bottom };
+        }
+
+        function getShapeAnchors(shape) {
+                const bounds = getShapeBounds(shape);
+                const centerY = (bounds.top + bounds.bottom) / 2;
+                const centerX = (bounds.left + bounds.right) / 2;
+                return {
+                        left: { x: bounds.left, y: centerY },
+                        right: { x: bounds.right, y: centerY },
+                        bottom: { x: centerX, y: bounds.bottom },
+                };
+        }
+
+        function distance(a, b) {
+                const dx = a.x - b.x;
+                const dy = a.y - b.y;
+                return Math.sqrt(dx * dx + dy * dy);
+        }
+
+        function snapToAnchor(point) {
+                const SNAP_DISTANCE = 32;
+                if (!state.board || !state.board.shapes.length) {
+                        return { point };
+                }
+
+                let closest = null;
+                state.board.shapes.forEach((shape) => {
+                        const anchors = getShapeAnchors(shape);
+                        Object.entries(anchors).forEach(([side, anchorPoint]) => {
+                                const dist = distance(point, anchorPoint);
+                                if (dist <= SNAP_DISTANCE && (!closest || dist < closest.dist)) {
+                                        closest = { dist, anchor: { shapeId: shape.id, side, point: anchorPoint } };
+                                }
+                        });
+                });
+
+                if (closest) return closest.anchor;
+                return { point };
+        }
+
+        function resolveAnchor(anchor) {
+                if (!anchor) return null;
+                if (anchor.shapeId) {
+                        const shape = state.board?.shapes.find((s) => s.id === anchor.shapeId);
+                        if (shape) {
+                                const anchors = getShapeAnchors(shape);
+                                if (anchor.side && anchors[anchor.side]) {
+                                        return anchors[anchor.side];
+                                }
+                        }
+                }
+                if (anchor.point) return anchor.point;
+                return anchor;
+        }
+
         function completeDrawing(world) {
                 switch (state.tool) {
                 case 'rectangle':
@@ -458,8 +522,8 @@
         function makeConnector(start, end) {
                 return {
                         id: uid(),
-                        from: start,
-                        to: end,
+                        from: snapToAnchor(start),
+                        to: snapToAnchor(end),
                         color: '#fbbf24',
                         width: 2,
                         label: 'flow',
