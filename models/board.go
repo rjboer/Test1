@@ -17,6 +17,15 @@ type Shape struct {
 	StrokeWidth float64 `json:"strokeWidth"`
 }
 
+// Stroke represents a freehand path drawn with the pen tool.
+type Stroke struct {
+	ID        string  `json:"id"`
+	Points    []Point `json:"points"`
+	Color     string  `json:"color"`
+	Width     float64 `json:"width"`
+	Smoothing float64 `json:"smoothing"`
+}
+
 // Connector represents a link between two points on the board.
 type Connector struct {
 	ID    string  `json:"id"`
@@ -68,6 +77,7 @@ type Board struct {
 	ID         string       `json:"id"`
 	Name       string       `json:"name"`
 	Shapes     []Shape      `json:"shapes"`
+	Strokes    []Stroke     `json:"strokes"`
 	Texts      []TextItem   `json:"texts"`
 	Notes      []StickyNote `json:"notes"`
 	Connectors []Connector  `json:"connectors"`
