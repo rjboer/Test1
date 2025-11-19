@@ -14,6 +14,7 @@
                 offset: { x: 0, y: 0 },
                 pan: { active: false, origin: null, startOffset: null, button: null },
                 drawing: null,
+                selection: null,
                 eventSource: null,
                 myCursor: {
                         id: crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(16).slice(2),
@@ -58,6 +59,7 @@
         canvas.addEventListener('mousedown', (e) => {
                 if (!state.board) return;
                 const world = toWorld(e);
+                const hit = hitTest(world);
                 const rightButton = e.button === 2;
                 if (rightButton || state.tool === 'pan') {
                         state.pan = {
@@ -69,6 +71,13 @@
                         setStatus('Panning');
                         return;
                 }
+                if (hit) {
+                        const handle = detectHandleHit(hit, e);
+                        startSelection(hit, world, handle);
+                        render();
+                        return;
+                }
+                state.selection = null;
                 if (e.button !== 0) return;
                 state.drawing = { start: world, current: world };
         });
@@ -88,6 +97,9 @@
                         const dy = e.clientY - state.pan.origin.y;
                         state.offset = { x: state.pan.startOffset.x + dx, y: state.pan.startOffset.y + dy };
                         render();
+                } else if (state.selection && state.selection.dragging) {
+                        updateSelection(world);
+                        render();
                 } else if (state.drawing) {
                         state.drawing.current = world;
                         render();
@@ -104,6 +116,13 @@
                         setStatus('Ready');
                         return;
                 }
+                if (state.selection && state.selection.dragging && (e.button === 0 || e.buttons === 0)) {
+                        state.selection.dragging = false;
+                        if (state.selection.dirty) {
+                                syncBoard();
+                        }
+                        return;
+                }
                 if (state.drawing) {
                         completeDrawing(world);
                         state.drawing = null;
@@ -114,6 +133,9 @@
                 if (state.pan.active) {
                         state.pan = { active: false, origin: null, startOffset: null, button: null };
                         setStatus('Ready');
+                }
+                if (state.selection && state.selection.dragging) {
+                        state.selection.dragging = false;
                 }
                 state.drawing = null;
         });
@@ -240,6 +262,7 @@
                 state.board.shapes.forEach(drawShape);
                 state.board.notes.forEach(drawNote);
                 state.board.texts.forEach(drawText);
+                drawSelection();
                 drawCursors();
 
                 if (state.drawing) {
@@ -651,18 +674,247 @@
                 }
         }
 
+        function hitTest(world) {
+                const text = hitText(world);
+                if (text) return { type: 'text', item: text };
+                const note = hitNote(world);
+                if (note) return { type: 'note', item: note };
+                const shape = hitShape(world);
+                if (shape) return { type: 'shape', item: shape };
+                return null;
+        }
+
+        function hitShape(world) {
+                for (let i = state.board.shapes.length - 1; i >= 0; i -= 1) {
+                        const shape = state.board.shapes[i];
+                        const bounds = getBounds({ type: 'shape', item: shape });
+                        if (!bounds) continue;
+                        if (world.x >= bounds.x && world.x <= bounds.x + bounds.width && world.y >= bounds.y && world.y <= bounds.y + bounds.height) {
+                                return shape;
+                        }
+                }
+                return null;
+        }
+
         function hitNote(world) {
-                return state.board.notes.find((note) => {
-                        return world.x >= note.position.x && world.x <= note.position.x + note.width && world.y >= note.position.y && world.y <= note.position.y + note.height;
-                });
+                for (let i = state.board.notes.length - 1; i >= 0; i -= 1) {
+                        const note = state.board.notes[i];
+                        const bounds = getBounds({ type: 'note', item: note });
+                        if (world.x >= bounds.x && world.x <= bounds.x + bounds.width && world.y >= bounds.y && world.y <= bounds.y + bounds.height) {
+                                return note;
+                        }
+                }
+                return null;
         }
 
         function hitText(world) {
-                return state.board.texts.find((text) => {
-                        const width = (text.content?.length || 4) * (text.fontSize || 16) * 0.55;
-                        const height = (text.fontSize || 16);
-                        return world.x >= text.position.x && world.x <= text.position.x + width && world.y >= text.position.y - height && world.y <= text.position.y + 4;
-                });
+                for (let i = state.board.texts.length - 1; i >= 0; i -= 1) {
+                        const text = state.board.texts[i];
+                        const bounds = getBounds({ type: 'text', item: text });
+                        if (!bounds) continue;
+                        if (world.x >= bounds.x && world.x <= bounds.x + bounds.width && world.y >= bounds.y - bounds.height && world.y <= bounds.y + 4) {
+                                return text;
+                        }
+                }
+                return null;
+        }
+
+        function getBounds(hit) {
+                if (!hit) return null;
+                switch (hit.type) {
+                case 'shape': {
+                        const [a, b] = hit.item.points;
+                        return {
+                                x: Math.min(a.x, b.x),
+                                y: Math.min(a.y, b.y),
+                                width: Math.abs(b.x - a.x),
+                                height: Math.abs(b.y - a.y),
+                        };
+                }
+                case 'note':
+                        return {
+                                x: hit.item.position.x,
+                                y: hit.item.position.y,
+                                width: hit.item.width,
+                                height: hit.item.height,
+                        };
+                case 'text': {
+                        const size = hit.item.fontSize || 16;
+                        const width = measureTextWidth(hit.item);
+                        return {
+                                x: hit.item.position.x,
+                                y: hit.item.position.y,
+                                width,
+                                height: size,
+                        };
+                }
+                default:
+                        return null;
+                }
+        }
+
+        function measureTextWidth(text) {
+                ctx.save();
+                ctx.font = `${(text.fontSize || 16)}px "Inter", sans-serif`;
+                const measurement = ctx.measureText(text.content || 'Text');
+                ctx.restore();
+                return Math.max(16, measurement.width || 0);
+        }
+
+        function startSelection(hit, world, handle) {
+                state.selection = {
+                        type: hit.type,
+                        target: hit.item,
+                        handle,
+                        mode: handle ? 'resize' : 'move',
+                        origin: world,
+                        initialBounds: getBounds(hit),
+                        initialPoints: hit.type === 'shape' ? hit.item.points.map((p) => ({ ...p })) : null,
+                        initialPosition: hit.item.position ? { ...hit.item.position } : null,
+                        initialSize: hit.type === 'note' ? { width: hit.item.width, height: hit.item.height } : null,
+                        dragging: true,
+                        dirty: false,
+                };
+        }
+
+        function updateSelection(world) {
+                const sel = state.selection;
+                if (!sel || !sel.dragging) return;
+                if (sel.mode === 'resize' && isResizable(sel.type)) {
+                        applyResize(sel, world);
+                } else if (sel.mode === 'move') {
+                        applyMove(sel, world);
+                }
+        }
+
+        function applyMove(sel, world) {
+                const dx = world.x - sel.origin.x;
+                const dy = world.y - sel.origin.y;
+                switch (sel.type) {
+                case 'shape':
+                        sel.target.points = sel.initialPoints.map((pt) => ({ x: pt.x + dx, y: pt.y + dy }));
+                        sel.dirty = true;
+                        break;
+                case 'note':
+                        sel.target.position = { x: sel.initialBounds.x + dx, y: sel.initialBounds.y + dy };
+                        sel.dirty = true;
+                        break;
+                case 'text':
+                        if (sel.initialPosition) {
+                                sel.target.position = { x: sel.initialPosition.x + dx, y: sel.initialPosition.y + dy };
+                                sel.dirty = true;
+                        }
+                        break;
+                default:
+                        break;
+                }
+        }
+
+        function applyResize(sel, world) {
+                const bounds = { ...sel.initialBounds };
+                const minSize = 16;
+                switch (sel.handle) {
+                case 'nw': {
+                        const right = bounds.x + bounds.width;
+                        const bottom = bounds.y + bounds.height;
+                        bounds.x = Math.min(world.x, right - minSize);
+                        bounds.y = Math.min(world.y, bottom - minSize);
+                        bounds.width = right - bounds.x;
+                        bounds.height = bottom - bounds.y;
+                        break;
+                }
+                case 'ne': {
+                        const left = bounds.x;
+                        const bottom = bounds.y + bounds.height;
+                        bounds.y = Math.min(world.y, bottom - minSize);
+                        bounds.width = Math.max(minSize, world.x - left);
+                        bounds.height = bottom - bounds.y;
+                        break;
+                }
+                case 'sw': {
+                        const right = bounds.x + bounds.width;
+                        bounds.x = Math.min(world.x, right - minSize);
+                        bounds.width = right - bounds.x;
+                        bounds.height = Math.max(minSize, world.y - bounds.y);
+                        break;
+                }
+                case 'se':
+                default:
+                        bounds.width = Math.max(minSize, world.x - bounds.x);
+                        bounds.height = Math.max(minSize, world.y - bounds.y);
+                        break;
+                }
+
+                switch (sel.type) {
+                case 'shape':
+                        sel.target.points = [
+                                { x: bounds.x, y: bounds.y },
+                                { x: bounds.x + bounds.width, y: bounds.y + bounds.height },
+                        ];
+                        sel.dirty = true;
+                        break;
+                case 'note':
+                        sel.target.position = { x: bounds.x, y: bounds.y };
+                        sel.target.width = bounds.width;
+                        sel.target.height = bounds.height;
+                        sel.dirty = true;
+                        break;
+                default:
+                        break;
+                }
+        }
+
+        function detectHandleHit(hit, evt) {
+                if (!isResizable(hit.type)) return null;
+                const bounds = getBounds(hit);
+                if (!bounds) return null;
+                const screen = eventToScreen(evt);
+                const handles = handlePositions(bounds);
+                const handleSize = 10;
+                return handles.find((h) => Math.abs(h.x - screen.x) <= handleSize && Math.abs(h.y - screen.y) <= handleSize)?.name || null;
+        }
+
+        function eventToScreen(evt) {
+                const rect = canvas.getBoundingClientRect();
+                return { x: evt.clientX - rect.left, y: evt.clientY - rect.top };
+        }
+
+        function handlePositions(bounds) {
+                const tl = toScreenPoint({ x: bounds.x, y: bounds.y });
+                const tr = toScreenPoint({ x: bounds.x + bounds.width, y: bounds.y });
+                const bl = toScreenPoint({ x: bounds.x, y: bounds.y + bounds.height });
+                const br = toScreenPoint({ x: bounds.x + bounds.width, y: bounds.y + bounds.height });
+                return [
+                        { name: 'nw', x: tl.x, y: tl.y },
+                        { name: 'ne', x: tr.x, y: tr.y },
+                        { name: 'sw', x: bl.x, y: bl.y },
+                        { name: 'se', x: br.x, y: br.y },
+                ];
+        }
+
+        function isResizable(type) {
+                return type === 'shape' || type === 'note';
+        }
+
+        function drawSelection() {
+                const sel = state.selection;
+                if (!sel || !sel.target) return;
+                const bounds = getBounds(sel);
+                if (!bounds) return;
+                const screen = toScreenPoint({ x: bounds.x, y: bounds.y });
+                const w = bounds.width * state.scale;
+                const h = bounds.height * state.scale;
+                ctx.save();
+                ctx.strokeStyle = '#60a5fa';
+                ctx.setLineDash([4, 2]);
+                ctx.strokeRect(screen.x, screen.y, w, h);
+                if (isResizable(sel.type)) {
+                        ctx.fillStyle = '#60a5fa';
+                        handlePositions(bounds).forEach((handle) => {
+                                ctx.fillRect(handle.x - 5, handle.y - 5, 10, 10);
+                        });
+                }
+                ctx.restore();
         }
 
         resizeCanvas();
