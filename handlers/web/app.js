@@ -498,17 +498,38 @@
                         ctx.restore();
                         return;
                 }
+
+                if (drawing.tool === 'connector') {
+                        drawConnectorPreview(drawing);
+                        return;
+                }
+
                 const start = toScreenPoint(drawing.start);
                 const end = toScreenPoint(drawing.current);
                 ctx.save();
                 ctx.setLineDash([6, 4]);
                 ctx.strokeStyle = '#9ca3af';
                 ctx.lineWidth = 1;
-                if (drawing.tool === 'rectangle' || drawing.tool === 'ellipse' || drawing.tool === 'connector') {
+                if (drawing.tool === 'rectangle' || drawing.tool === 'ellipse') {
                         ctx.beginPath();
                         ctx.rect(Math.min(start.x, end.x), Math.min(start.y, end.y), Math.abs(end.x - start.x), Math.abs(end.y - start.y));
                         ctx.stroke();
                 }
+                ctx.restore();
+        }
+
+        function drawConnectorPreview(drawing) {
+                const preview = {
+                        from: snapToAnchor(drawing.start),
+                        to: snapToAnchor(drawing.current),
+                        color: '#fbbf24',
+                        width: 2,
+                        label: 'flow',
+                };
+
+                ctx.save();
+                ctx.globalAlpha = 0.7;
+                drawConnector(preview);
                 ctx.restore();
         }
 
