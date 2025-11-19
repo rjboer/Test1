@@ -82,6 +82,7 @@ func (s *Store) DeleteBoard(id string) bool {
 func copyBoard(src models.Board) models.Board {
 	dst := src
 	dst.Shapes = append([]models.Shape(nil), src.Shapes...)
+	dst.Strokes = append([]models.Stroke(nil), src.Strokes...)
 	dst.Texts = append([]models.TextItem(nil), src.Texts...)
 	dst.Notes = append([]models.StickyNote(nil), src.Notes...)
 	dst.Connectors = append([]models.Connector(nil), src.Connectors...)
