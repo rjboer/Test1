@@ -84,6 +84,7 @@ func copyBoard(src models.Board) models.Board {
 	dst.Shapes = append([]models.Shape(nil), src.Shapes...)
 	dst.Texts = append([]models.TextItem(nil), src.Texts...)
 	dst.Notes = append([]models.StickyNote(nil), src.Notes...)
+	dst.Connectors = append([]models.Connector(nil), src.Connectors...)
 	return dst
 }
 
