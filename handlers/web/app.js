@@ -225,7 +225,7 @@
                         strokes: board.strokes || [],
                         texts: board.texts || [],
                         notes: board.notes || [],
-                        connectors: board.connectors || [],
+                        connectors: normalizeConnectors(board.connectors || []),
                         comments: board.comments || [],
                 };
         }
@@ -373,8 +373,10 @@
         }
 
         function drawConnector(conn) {
-                const startWorld = resolveAnchor(conn.from) || conn.from;
-                const endWorld = resolveAnchor(conn.to) || conn.to;
+                const startWorld = anchorToPoint(conn.from) || conn.from;
+                const endWorld = anchorToPoint(conn.to) || conn.to;
+                if (!startWorld || !endWorld) return;
+
                 const start = toScreenPoint(startWorld);
                 const end = toScreenPoint(endWorld);
                 ctx.save();
@@ -583,7 +585,7 @@
                 return { point };
         }
 
-        function resolveAnchor(anchor) {
+        function anchorToPoint(anchor) {
                 if (!anchor) return null;
                 if (anchor.shapeId) {
                         const shape = state.board?.shapes.find((s) => s.id === anchor.shapeId);
@@ -595,7 +597,20 @@
                         }
                 }
                 if (anchor.point) return anchor.point;
-                return anchor;
+                if (typeof anchor.x === 'number' && typeof anchor.y === 'number') return anchor;
+                return null;
+        }
+
+        function normalizeConnector(connector) {
+                return {
+                        ...connector,
+                        from: anchorToPoint(connector.from) || connector.from,
+                        to: anchorToPoint(connector.to) || connector.to,
+                };
+        }
+
+        function normalizeConnectors(connectors) {
+                return (connectors || []).map(normalizeConnector);
         }
 
         function startStroke(point) {
@@ -686,7 +701,7 @@
         }
 
         function makeConnector(start, end) {
-                return {
+                const connector = {
                         id: uid(),
                         from: snapToAnchor(start),
                         to: snapToAnchor(end),
@@ -694,6 +709,7 @@
                         width: 2,
                         label: 'flow',
                 };
+                return normalizeConnector(connector);
         }
 
         function makeText(content, position) {
@@ -958,12 +974,15 @@
 
         async function syncBoard() {
                 if (!state.board) return;
+                const normalizedConnectors = normalizeConnectors(state.board.connectors);
+                state.board.connectors = normalizedConnectors;
                 setStatus('Syncing…');
                 try {
+                        const payload = { ...state.board, connectors: normalizedConnectors };
                         await fetch(`/boards/${state.boardId}`, {
                                 method: 'PUT',
                                 headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify(state.board),
+                                body: JSON.stringify(payload),
                         });
                         setStatus('Live');
                 } catch (err) {
@@ -1072,6 +1091,7 @@
                 if (!hit) return null;
                 switch (hit.type) {
                 case 'shape': {
+                        if (!hit.item?.points || hit.item.points.length < 2) return null;
                         const [a, b] = hit.item.points;
                         return {
                                 x: Math.min(a.x, b.x),
@@ -1081,6 +1101,7 @@
                         };
                 }
                 case 'note':
+                        if (!hit.item?.position) return null;
                         return {
                                 x: hit.item.position.x,
                                 y: hit.item.position.y,
@@ -1088,6 +1109,7 @@
                                 height: hit.item.height,
                         };
                 case 'text': {
+                        if (!hit.item?.position) return null;
                         const size = hit.item.fontSize || 16;
                         const width = measureTextWidth(hit.item);
                         return {
