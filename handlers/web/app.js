@@ -72,6 +72,13 @@
                         setStatus('Panning');
                         return;
                 }
+                if (e.button === 0) {
+                        const pinned = hitComment(world);
+                        if (pinned) {
+                                openCommentEditor(pinned.position, pinned);
+                                return;
+                        }
+                }
                 if (state.tool === 'comment' && e.button === 0) {
                         handleComment(world);
                         return;
