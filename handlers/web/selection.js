@@ -1,11 +1,12 @@
 import { clamp } from './utils.js';
 
 export function startSelection(state, hit, world, handle, helpers) {
+        const resolvedHandle = handle ?? hit?.handle ?? null;
         const items = hit ? [{ hit, initial: captureInitial(hit, helpers) }] : [];
         state.selection = {
                 items,
-                handle,
-                mode: handle ? 'resize' : 'move',
+                handle: resolvedHandle,
+                mode: resolvedHandle && helpers.isResizable(hit?.type) ? 'resize' : 'move',
                 origin: world,
                 initialUnion: items.length ? helpers.getBounds(hit) : null,
                 dragging: true,
@@ -38,11 +39,11 @@ export function updateSelection(state, world, helpers) {
         if (sel.mode === 'resize' && sel.handle && canResize) {
                         applyResize(sel, world, helpers);
         } else if (sel.mode === 'move') {
-                        applyMove(sel, world);
+                        applyMove(sel, world, helpers);
         }
 }
 
-function applyMove(sel, world) {
+function applyMove(sel, world, helpers) {
         const dx = world.x - sel.origin.x;
         const dy = world.y - sel.origin.y;
         sel.items.forEach(({ hit, initial }) => {
@@ -67,6 +68,16 @@ function applyMove(sel, world) {
                                 sel.dirty = true;
                         }
                         break;
+                case 'connector': {
+                        if (!initial.fromPoint || !initial.toPoint) break;
+                        const handle = sel.handle;
+                        const moveFrom = handle === 'to' ? { ...initial.fromPoint } : { x: initial.fromPoint.x + dx, y: initial.fromPoint.y + dy };
+                        const moveTo = handle === 'from' ? { ...initial.toPoint } : { x: initial.toPoint.x + dx, y: initial.toPoint.y + dy };
+                        hit.item.from = helpers.snapToAnchor(moveFrom);
+                        hit.item.to = helpers.snapToAnchor(moveTo);
+                        sel.dirty = true;
+                        break;
+                }
                 default:
                         break;
                 }
@@ -139,6 +150,17 @@ function applyResize(sel, world, helpers) {
                         };
                         sel.dirty = true;
                         break;
+                case 'connector': {
+                        if (!initial.fromPoint || !initial.toPoint) break;
+                        const relFrom = { x: initial.fromPoint.x - initialUnion.x, y: initial.fromPoint.y - initialUnion.y };
+                        const relTo = { x: initial.toPoint.x - initialUnion.x, y: initial.toPoint.y - initialUnion.y };
+                        const nextFrom = { x: bounds.x + relFrom.x * scaleX, y: bounds.y + relFrom.y * scaleY };
+                        const nextTo = { x: bounds.x + relTo.x * scaleX, y: bounds.y + relTo.y * scaleY };
+                        hit.item.from = helpers.snapToAnchor(nextFrom);
+                        hit.item.to = helpers.snapToAnchor(nextTo);
+                        sel.dirty = true;
+                        break;
+                }
                 default:
                         break;
                 }
@@ -150,6 +172,8 @@ function captureInitial(hit, helpers) {
                 bounds: helpers.getBounds(hit),
                 points: hit.type === 'shape' ? hit.item.points.map((p) => ({ ...p })) : null,
                 position: hit.item.position ? { ...hit.item.position } : null,
+                fromPoint: hit.type === 'connector' ? helpers.anchorToPoint(hit.item.from) || hit.item.from : null,
+                toPoint: hit.type === 'connector' ? helpers.anchorToPoint(hit.item.to) || hit.item.to : null,
         };
 }
 
