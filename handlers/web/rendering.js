@@ -116,9 +116,9 @@ export function createRenderer(ctx, canvas, state) {
         }
 
         function drawConnector(conn) {
-                const startWorld = anchorToPoint(conn.from) || conn.from;
-                const endWorld = anchorToPoint(conn.to) || conn.to;
-                if (!startWorld || !endWorld) return;
+                const points = connectorPoints(conn);
+                if (!points) return;
+                const { from: startWorld, to: endWorld } = points;
 
                 const start = toScreenPoint(startWorld, state);
                 const end = toScreenPoint(endWorld, state);
@@ -140,6 +140,13 @@ export function createRenderer(ctx, canvas, state) {
                         ctx.fillText(conn.label, mid.x, mid.y);
                 }
                 ctx.restore();
+        }
+
+        function connectorPoints(conn) {
+                const startWorld = anchorToPoint(conn.from) || conn.from;
+                const endWorld = anchorToPoint(conn.to) || conn.to;
+                if (!startWorld || !endWorld) return null;
+                return { from: startWorld, to: endWorld };
         }
 
         function drawCausalLink(link) {
@@ -458,6 +465,16 @@ export function createRenderer(ctx, canvas, state) {
                                 width: hit.item.width,
                                 height: hit.item.height,
                         };
+                case 'connector': {
+                        const padding = 6;
+                        const points = connectorPoints(hit.item);
+                        if (!points) return null;
+                        const left = Math.min(points.from.x, points.to.x) - padding;
+                        const top = Math.min(points.from.y, points.to.y) - padding;
+                        const width = Math.abs(points.to.x - points.from.x) + padding * 2;
+                        const height = Math.abs(points.to.y - points.from.y) + padding * 2;
+                        return { x: left, y: top, width, height };
+                }
                 case 'text': {
                         if (!hit.item?.position) return null;
                         const size = hit.item.fontSize || 16;
@@ -501,6 +518,8 @@ export function createRenderer(ctx, canvas, state) {
                 if (causalNode) return { type: 'causal-node', item: causalNode };
                 const shape = hitShape(world);
                 if (shape) return { type: 'shape', item: shape };
+                const connector = hitConnector(world);
+                if (connector) return connector;
                 return null;
         }
 
@@ -546,6 +565,27 @@ export function createRenderer(ctx, canvas, state) {
                         const dist = distance(world, node.position);
                         if (dist <= radius) {
                                 return node;
+                        }
+                }
+                return null;
+        }
+
+        function hitConnector(world) {
+                if (!state.board?.connectors?.length) return null;
+
+                const tolerance = 10;
+                for (let i = state.board.connectors.length - 1; i >= 0; i -= 1) {
+                        const conn = state.board.connectors[i];
+                        const points = connectorPoints(conn);
+                        if (!points) continue;
+                        const { from, to } = points;
+                        const mid = { x: (from.x + to.x) / 2, y: (from.y + to.y) / 2 };
+                        if (distance(world, from) <= tolerance) return { type: 'connector', item: conn, handle: 'from' };
+                        if (distance(world, to) <= tolerance) return { type: 'connector', item: conn, handle: 'to' };
+                        if (distance(world, mid) <= tolerance) return { type: 'connector', item: conn, handle: 'midpoint' };
+                        const d = pointToSegmentDistance(world, from, to);
+                        if (d <= tolerance) {
+                                return { type: 'connector', item: conn, handle: null };
                         }
                 }
                 return null;
