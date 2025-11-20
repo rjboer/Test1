@@ -43,7 +43,11 @@ import { createFlyingLogicController } from './controllers/flyingLogicController
         const miroToolbar = document.getElementById('miro-toolbar');
         const causalToolbar = document.getElementById('causal-toolbar');
 
-        const state = createInitialState(window.initialBoardID);
+        const initialBoardId = document.body?.dataset.boardId;
+        if (!initialBoardId) {
+                throw new Error('Initial board id missing');
+        }
+        const state = createInitialState(initialBoardId);
 
         const renderer = createRenderer(ctx, canvas, state);
         const boardApi = createBoardApi(state, renderer, (msg) => setStatus(status, msg), meta, handleBoardChange);

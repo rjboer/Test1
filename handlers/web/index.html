@@ -6,7 +6,7 @@
         <title>Boards - Miro style demo</title>
         <link rel="stylesheet" href="/static/styles.css" />
 </head>
-<body>
+<body data-board-id="{{.BoardID}}">
         <header class="topbar">
                 <div class="topbar-left">
                         <div class="brand">Boards</div>
@@ -142,9 +142,6 @@
                         </div>
                 </div>
         </div>
-        <script>
-                window.initialBoardID = "{{.BoardID}}";
-        </script>
         <script type="module" src="/static/app.js"></script>
 </body>
 </html>
