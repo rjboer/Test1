@@ -41,7 +41,7 @@ func (s *Server) Start() error {
 		Addr:         s.addr,
 		Handler:      mux,
 		ReadTimeout:  10 * time.Second,
-		WriteTimeout: 10 * time.Second,
+		WriteTimeout: 0,
 		IdleTimeout:  60 * time.Second,
 	}
 

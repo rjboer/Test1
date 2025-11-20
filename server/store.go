@@ -85,8 +85,23 @@ func copyBoard(src models.Board) models.Board {
 	dst.Strokes = append([]models.Stroke(nil), src.Strokes...)
 	dst.Texts = append([]models.TextItem(nil), src.Texts...)
 	dst.Notes = append([]models.StickyNote(nil), src.Notes...)
-	dst.Connectors = append([]models.Connector(nil), src.Connectors...)
+	dst.Connectors = make([]models.Connector, len(src.Connectors))
+	for i, conn := range src.Connectors {
+		copyConn := conn
+		copyConn.From = copyAnchor(conn.From)
+		copyConn.To = copyAnchor(conn.To)
+		dst.Connectors[i] = copyConn
+	}
 	dst.Comments = append([]models.Comment(nil), src.Comments...)
+	return dst
+}
+
+func copyAnchor(src models.Anchor) models.Anchor {
+	dst := src
+	if src.Point != nil {
+		copyPoint := *src.Point
+		dst.Point = &copyPoint
+	}
 	return dst
 }
 
