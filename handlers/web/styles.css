@@ -126,6 +126,64 @@ body {
         line-height: 1.6;
 }
 
+.templates {
+        margin-top: 14px;
+        padding: 12px;
+        background: rgba(255, 255, 255, 0.02);
+        border: 1px solid #1f2937;
+        border-radius: 10px;
+}
+
+.template-picker label {
+        display: block;
+        margin-bottom: 6px;
+        color: var(--muted);
+        font-size: 13px;
+}
+
+.template-picker select {
+        width: 100%;
+        padding: 8px;
+        border-radius: 8px;
+        border: 1px solid #1f2937;
+        background: #0b1224;
+        color: var(--text);
+        margin-bottom: 8px;
+}
+
+.template-picker button {
+        width: 100%;
+        padding: 10px;
+        border-radius: 8px;
+        border: 1px solid var(--accent);
+        background: var(--accent);
+        color: #0b1224;
+        font-weight: 600;
+        cursor: pointer;
+        margin-top: 6px;
+        transition: transform 0.1s ease;
+}
+
+.template-picker button:hover {
+        transform: translateY(-1px);
+}
+
+.template-description {
+        background: rgba(15, 23, 42, 0.6);
+        border: 1px solid #1f2937;
+        border-radius: 8px;
+        padding: 10px;
+        color: var(--muted);
+        font-size: 13px;
+        min-height: 52px;
+}
+
+.template-hint {
+        font-size: 12px;
+        color: var(--muted);
+        margin: 8px 0 0;
+}
+
 .legend ul {
         padding-left: 18px;
         color: var(--muted);
