@@ -5,6 +5,7 @@ import { createEditors } from './editors.js';
 import { startSelection, startSelectionFromHits, updateSelection, clearSelection } from './selection.js';
 import { toWorld, screenToWorld, eventToScreen } from './geometry.js';
 import { clamp, uid } from './utils.js';
+import { instantiateTemplate, templates } from './templates.js';
 
 (() => {
         const canvas = document.getElementById('board-canvas');
@@ -13,11 +14,16 @@ import { clamp, uid } from './utils.js';
         const status = document.getElementById('status');
         const meta = document.getElementById('board-meta');
         const deleteBtn = document.getElementById('delete-selection');
+        const templateSelect = document.getElementById('template-select');
+        const templateInsertBtn = document.getElementById('template-insert');
+        const templateDescription = document.getElementById('template-description');
         const state = createInitialState(window.initialBoardID);
 
         const renderer = createRenderer(ctx, canvas, state);
         const boardApi = createBoardApi(state, renderer, (msg) => setStatus(status, msg), meta);
         const editors = createEditors(state, renderer, () => boardApi.syncBoard());
+
+        setupTemplatePicker();
 
         function resizeCanvas() {
                 const rect = canvas.getBoundingClientRect();
@@ -48,6 +54,10 @@ import { clamp, uid } from './utils.js';
                 const world = toWorld(e, canvas, state);
                 const screen = eventToScreen(e, canvas);
                 const handle = detectExistingHandle(screen, world);
+                if (state.pendingTemplate && e.button === 0) {
+                        placeTemplate(world);
+                        return;
+                }
                 if (handle) return;
 
                 const hit = renderer.hitTest(world);
@@ -216,6 +226,10 @@ import { clamp, uid } from './utils.js';
                 if ((evt.key === 'Delete' || evt.key === 'Backspace') && state.selection?.items?.length) {
                         evt.preventDefault();
                         deleteSelection();
+                }
+                if (evt.key === 'Escape' && state.pendingTemplate) {
+                        state.pendingTemplate = null;
+                        setStatus(status, 'Template placement cancelled');
                 }
         });
 
@@ -395,6 +409,55 @@ import { clamp, uid } from './utils.js';
                 clearSelection(state);
                 renderer.render();
                 boardApi.syncBoard();
+        }
+
+        function setupTemplatePicker() {
+                if (!templateSelect || !templateInsertBtn || !templateDescription) return;
+                templates.forEach((t) => {
+                        const option = document.createElement('option');
+                        option.value = t.id;
+                        option.textContent = t.name;
+                        templateSelect.appendChild(option);
+                });
+                if (templates.length) {
+                        templateSelect.value = templates[0].id;
+                        updateTemplateDescription(templates[0].id);
+                }
+
+                templateSelect.addEventListener('change', (evt) => {
+                        updateTemplateDescription(evt.target.value);
+                });
+
+                templateInsertBtn.addEventListener('click', () => {
+                        const template = templates.find((t) => t.id === templateSelect.value);
+                        if (!template) return;
+                        state.pendingTemplate = template;
+                        setStatus(status, `Placement armed: ${template.name}. Click the board to drop it.`);
+                });
+        }
+
+        function updateTemplateDescription(templateId) {
+                const template = templates.find((t) => t.id === templateId);
+                if (!template) return;
+                templateDescription.textContent = template.description;
+        }
+
+        function placeTemplate(world) {
+                if (!state.board || !state.pendingTemplate) return;
+                const result = instantiateTemplate(state.pendingTemplate, world);
+                state.pendingTemplate = null;
+                if (!result) {
+                        setStatus(status, 'Could not create template');
+                        return;
+                }
+                state.board.shapes.push(...result.shapes);
+                state.board.notes.push(...result.notes);
+                state.board.texts.push(...result.texts);
+                state.board.connectors.push(...result.connectors);
+                state.board.comments.push(...result.comments);
+                renderer.render();
+                boardApi.syncBoard();
+                setStatus(status, `${result.name} added`);
         }
 
         resizeCanvas();

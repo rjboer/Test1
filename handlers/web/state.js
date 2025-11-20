@@ -21,6 +21,7 @@ export function createInitialState(boardId) {
                 cursors: new Map(),
                 lastCursorSent: 0,
                 strokeSettings: { width: 3, smoothing: 0.45 },
+                pendingTemplate: null,
         };
 }
 
