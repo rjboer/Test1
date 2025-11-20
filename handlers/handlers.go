@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"test1/models"
+	"test1/status"
 )
 
 // BoardStore abstracts persistence for boards.
@@ -108,7 +109,7 @@ func (h *Handler) createBoard(w http.ResponseWriter, r *http.Request) {
 		incoming.Name = "Untitled Board"
 	}
 
-	created := h.store.CreateBoard(incoming)
+	created := h.store.CreateBoard(status.Propagate(incoming))
 	h.broadcastBoardEvent(created.ID, "board.created", created)
 	respondJSON(w, http.StatusCreated, created)
 }
@@ -129,7 +130,7 @@ func (h *Handler) updateBoard(w http.ResponseWriter, r *http.Request, id string)
 		return
 	}
 	updated.ID = id
-	board, ok := h.store.UpdateBoard(updated)
+	board, ok := h.store.UpdateBoard(status.Propagate(updated))
 	if !ok {
 		http.NotFound(w, r)
 		return

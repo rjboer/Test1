@@ -180,6 +180,8 @@ export function createRenderer(ctx, canvas, state) {
                 const pos = toScreenPoint(node.position, state);
                 const radius = 28 * state.scale;
                 const color = node.color || polarityColor('neutral');
+                const statusInfo = state.statusRollup?.get(node.id);
+                const statusColor = nodeStatusColor(statusInfo?.status || node.status);
                 ctx.save();
                 ctx.fillStyle = color;
                 ctx.strokeStyle = '#0b1224';
@@ -188,11 +190,23 @@ export function createRenderer(ctx, canvas, state) {
                 ctx.arc(pos.x, pos.y, radius, 0, Math.PI * 2);
                 ctx.fill();
                 ctx.stroke();
+                if (statusColor) {
+                        ctx.strokeStyle = statusColor;
+                        ctx.lineWidth = 4;
+                        ctx.beginPath();
+                        ctx.arc(pos.x, pos.y, radius + 6, 0, Math.PI * 2);
+                        ctx.stroke();
+                }
                 ctx.fillStyle = '#0b1224';
                 ctx.font = `${14 * state.scale}px "Inter", sans-serif`;
                 ctx.textAlign = 'center';
                 ctx.textBaseline = 'middle';
                 ctx.fillText(node.label || 'Node', pos.x, pos.y);
+                if (statusInfo?.summary) {
+                        ctx.fillStyle = '#e5e7eb';
+                        ctx.font = `${12 * state.scale}px "Inter", sans-serif`;
+                        ctx.fillText(formatEvidenceSummary(statusInfo.summary), pos.x, pos.y + radius + 14);
+                }
                 ctx.restore();
         }
 
@@ -387,7 +401,15 @@ export function createRenderer(ctx, canvas, state) {
         function renderMeta(metaEl) {
                 if (!state.board || !metaEl) return;
                 const updated = new Date(state.board.updatedAt).toLocaleTimeString();
-                metaEl.innerHTML = `ID: ${state.board.id}<br/>Name: ${state.board.name}<br/>Shapes: ${state.board.shapes.length}<br/>Notes: ${state.board.notes.length}<br/>Texts: ${state.board.texts.length}<br/>Connectors: ${state.board.connectors.length}<br/>Causal nodes: ${state.board.causalNodes.length}<br/>Causal links: ${state.board.causalLinks.length}<br/>Comments: ${state.board.comments.length}<br/>Updated: ${updated}`;
+                const statusLines = (state.board.causalNodes || [])
+                        .map((node) => {
+                                const rollup = state.statusRollup?.get(node.id);
+                                const badge = node.status ? ` – ${node.status} (${Math.round((node.confidence || 0) * 100)}%)` : '';
+                                const evidence = rollup?.summary ? ` [+${rollup.summary.positive}/-${rollup.summary.negative}/~${rollup.summary.neutral}]` : '';
+                                return `${node.label || node.id}${badge}${evidence}`;
+                        })
+                        .join('<br/>');
+                metaEl.innerHTML = `ID: ${state.board.id}<br/>Name: ${state.board.name}<br/>Shapes: ${state.board.shapes.length}<br/>Notes: ${state.board.notes.length}<br/>Texts: ${state.board.texts.length}<br/>Connectors: ${state.board.connectors.length}<br/>Causal nodes: ${state.board.causalNodes.length}<br/>Causal links: ${state.board.causalLinks.length}<br/>Comments: ${state.board.comments.length}<br/>Updated: ${updated}<br/><br/><strong>Causal status</strong><br/>${statusLines}`;
         }
 
         function pruneCursors() {
@@ -648,6 +670,24 @@ export function createRenderer(ctx, canvas, state) {
                 if (link.polarity) parts.push(link.polarity === 'negative' ? '−' : link.polarity === 'neutral' ? '0' : '+');
                 if (typeof link.weight === 'number') parts.push(`w=${link.weight}`);
                 return parts.join(' ').trim();
+        }
+
+        function nodeStatusColor(status) {
+                switch (status) {
+                case 'positive':
+                        return '#34d399';
+                case 'negative':
+                        return '#f87171';
+                case 'neutral':
+                        return '#fbbf24';
+                default:
+                        return null;
+                }
+        }
+
+        function formatEvidenceSummary(summary) {
+                if (!summary) return '';
+                return `+${summary.positive}/-${summary.negative}/~${summary.neutral}`;
         }
 
         function findCausalNode(id) {

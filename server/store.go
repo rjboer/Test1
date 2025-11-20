@@ -92,7 +92,12 @@ func copyBoard(src models.Board) models.Board {
 		copyConn.To = copyAnchor(conn.To)
 		dst.Connectors[i] = copyConn
 	}
-	dst.CausalNodes = append([]models.CausalNode(nil), src.CausalNodes...)
+	dst.CausalNodes = make([]models.CausalNode, len(src.CausalNodes))
+	for i, node := range src.CausalNodes {
+		copyNode := node
+		copyNode.Evidence = append([]models.NodeEvidence(nil), node.Evidence...)
+		dst.CausalNodes[i] = copyNode
+	}
 	dst.CausalLinks = append([]models.CausalLink(nil), src.CausalLinks...)
 	dst.Comments = append([]models.Comment(nil), src.Comments...)
 	return dst

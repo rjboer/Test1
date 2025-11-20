@@ -1,4 +1,4 @@
-import { createInitialState, refreshGroupingMetadata, setStatus, setTool } from './state.js';
+import { createInitialState, recomputeStatusViews, refreshGroupingMetadata, setStatus, setTool } from './state.js';
 import { createRenderer } from './rendering.js';
 import { createBoardApi } from './board.js';
 import { createEditors } from './editors.js';
@@ -544,6 +544,7 @@ import { computeCausalLayout } from './layout.js';
         function handleBoardChange() {
                 state.layout.causalPositions = null;
                 refreshGroupingMetadata(state);
+                recomputeStatusViews(state);
                 updateGroupSuggestions();
         }
 
