@@ -11,6 +11,7 @@
                 <div class="brand">Boards</div>
                 <div class="toolbar" id="toolbar">
                         <button data-tool="pan" class="active">Pan</button>
+                        <button data-tool="select">Select</button>
                         <button data-tool="pen">Pen</button>
                         <button data-tool="rectangle">Rectangle</button>
                         <button data-tool="ellipse">Ellipse</button>
@@ -18,6 +19,7 @@
                         <button data-tool="note">Sticky</button>
                         <button data-tool="connector">Connector</button>
                         <button data-tool="comment">Comment</button>
+                        <button id="delete-selection" type="button">Delete</button>
                 </div>
                 <div class="status" id="status">Ready</div>
         </header>
@@ -47,6 +49,6 @@
         <script>
                 window.initialBoardID = "{{.BoardID}}";
         </script>
-        <script src="/static/app.js"></script>
+        <script type="module" src="/static/app.js"></script>
 </body>
 </html>
