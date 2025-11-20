@@ -355,7 +355,18 @@ export function createFlyingLogicController(context, elements) {
         function deleteSelection() {
                 if (!state.selection?.items?.length) return;
                 const ids = new Set(state.selection.items.map((item) => item.hit.item.id));
-                state.board.causalNodes = state.board.causalNodes.filter((node) => !ids.has(node.id));
+                const removedNodeIds = new Set();
+                state.board.causalNodes = state.board.causalNodes.filter((node) => {
+                        const keep = !ids.has(node.id);
+                        if (!keep) removedNodeIds.add(node.id);
+                        return keep;
+                });
+                state.board.causalLinks = state.board.causalLinks.filter(
+                        (link) =>
+                                !ids.has(link.id) &&
+                                !removedNodeIds.has(link.from) &&
+                                !removedNodeIds.has(link.to),
+                );
                 clearSelection();
                 render();
                 syncBoard();
