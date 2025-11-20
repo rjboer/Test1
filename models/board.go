@@ -26,11 +26,20 @@ type Stroke struct {
 	Smoothing float64 `json:"smoothing"`
 }
 
+// Anchor represents a point that may be tied to another shape or a free point.
+type Anchor struct {
+	ShapeID string  `json:"shapeId,omitempty"`
+	Side    string  `json:"side,omitempty"`
+	Point   *Point  `json:"point,omitempty"`
+	X       float64 `json:"x,omitempty"`
+	Y       float64 `json:"y,omitempty"`
+}
+
 // Connector represents a link between two points on the board.
 type Connector struct {
 	ID    string  `json:"id"`
-	From  Point   `json:"from"`
-	To    Point   `json:"to"`
+	From  Anchor  `json:"from"`
+	To    Anchor  `json:"to"`
 	Color string  `json:"color"`
 	Width float64 `json:"width"`
 	Label string  `json:"label"`

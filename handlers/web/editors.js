@@ -5,10 +5,11 @@ export function createEditors(state, renderer, onCommit) {
         let activeEditor = null;
 
         function hideEditor() {
-                if (activeEditor) {
-                        activeEditor.remove();
-                        activeEditor = null;
+                if (!activeEditor) return;
+                if (activeEditor.isConnected && activeEditor.parentNode) {
+                        activeEditor.parentNode.removeChild(activeEditor);
                 }
+                activeEditor = null;
         }
 
         function worldToPage(point, canvas) {
