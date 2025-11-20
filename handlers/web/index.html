@@ -23,6 +23,9 @@
                         <button data-tool="comment">Comment</button>
                         <button id="delete-selection" type="button">Delete</button>
                 </div>
+                <div class="actions">
+                        <button id="open-settings" type="button">Settings</button>
+                </div>
                 <div class="status" id="status">Ready</div>
         </header>
         <main class="layout">
@@ -71,6 +74,61 @@
                         </div>
                 </aside>
         </main>
+        <div class="modal" id="settings-modal" aria-hidden="true">
+                <div class="modal-backdrop" id="settings-dismiss"></div>
+                <div class="modal-content" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+                        <div class="modal-header">
+                                <h3 id="settings-title">Settings</h3>
+                                <button id="close-settings" class="icon-button" type="button" aria-label="Close settings">×</button>
+                        </div>
+                        <p class="modal-subtitle">Tune drawing defaults, snapping behavior, and how your cursor appears to others.</p>
+                        <form id="settings-form" class="settings-grid">
+                                <div class="field">
+                                        <label for="cursor-label">Cursor label</label>
+                                        <input id="cursor-label" name="cursorLabel" type="text" autocomplete="off" />
+                                </div>
+                                <div class="field">
+                                        <label for="cursor-color">Cursor color</label>
+                                        <input id="cursor-color" name="cursorColor" type="color" />
+                                </div>
+                                <div class="field">
+                                        <label for="stroke-width">Pen width</label>
+                                        <input id="stroke-width" name="strokeWidth" type="number" min="1" step="1" />
+                                </div>
+                                <div class="field">
+                                        <label for="stroke-smoothing">Pen smoothing</label>
+                                        <input id="stroke-smoothing" name="strokeSmoothing" type="range" min="0" max="1" step="0.05" />
+                                </div>
+                                <div class="field">
+                                        <label for="connector-color">Connector color</label>
+                                        <input id="connector-color" name="connectorColor" type="color" />
+                                </div>
+                                <div class="field">
+                                        <label for="connector-width">Connector width</label>
+                                        <input id="connector-width" name="connectorWidth" type="number" min="1" step="1" />
+                                </div>
+                                <div class="field">
+                                        <label for="connector-label">Default connector label</label>
+                                        <input id="connector-label" name="connectorLabel" type="text" autocomplete="off" />
+                                </div>
+                                <div class="field toggle">
+                                        <label for="snap-to-anchors">Snap connectors to shapes</label>
+                                        <input id="snap-to-anchors" name="snapToAnchors" type="checkbox" />
+                                </div>
+                                <div class="field">
+                                        <label for="snap-tolerance">Snap tolerance (px)</label>
+                                        <input id="snap-tolerance" name="snapTolerance" type="number" min="0" step="1" />
+                                </div>
+                        </form>
+                        <div class="modal-footer">
+                                <div id="settings-summary" class="settings-summary"></div>
+                                <div class="modal-actions">
+                                        <button id="reset-settings" type="button" class="ghost">Reset to defaults</button>
+                                        <button id="close-settings-footer" type="button">Done</button>
+                                </div>
+                        </div>
+                </div>
+        </div>
         <script>
                 window.initialBoardID = "{{.BoardID}}";
         </script>

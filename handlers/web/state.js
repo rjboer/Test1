@@ -1,7 +1,42 @@
-import { pickColor } from './utils.js';
+import { clamp, pickColor } from './utils.js';
+
+export const defaultSettings = {
+        cursorLabel: 'You',
+        cursorColor: pickColor(),
+        strokeWidth: 3,
+        strokeSmoothing: 0.45,
+        connectorColor: '#fbbf24',
+        connectorWidth: 2,
+        connectorLabel: 'flow',
+        snapToAnchors: true,
+        snapTolerance: 32,
+};
+
+const SETTINGS_KEY = 'boards-settings';
+
+function loadStoredSettings() {
+        if (typeof localStorage === 'undefined') return null;
+        try {
+                const raw = localStorage.getItem(SETTINGS_KEY);
+                return raw ? JSON.parse(raw) : null;
+        } catch (err) {
+                console.warn('Could not read settings', err);
+                return null;
+        }
+}
+
+function persistSettings(settings) {
+        if (typeof localStorage === 'undefined') return;
+        try {
+                localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+        } catch (err) {
+                console.warn('Could not store settings', err);
+        }
+}
 
 export function createInitialState(boardId) {
-        return {
+        const settings = { ...defaultSettings, ...(loadStoredSettings() || {}) };
+        const state = {
                 boardId,
                 board: null,
                 tool: 'pan',
@@ -14,18 +49,58 @@ export function createInitialState(boardId) {
                 eventSource: null,
                 myCursor: {
                         id: crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(16).slice(2),
-                        label: 'You',
-                        color: pickColor(),
+                        label: settings.cursorLabel,
+                        color: settings.cursorColor,
                         position: { x: 0, y: 0 },
                 },
                 cursors: new Map(),
                 lastCursorSent: 0,
-                strokeSettings: { width: 3, smoothing: 0.45 },
+                strokeSettings: { width: settings.strokeWidth, smoothing: settings.strokeSmoothing },
+                connectorDefaults: {
+                        color: settings.connectorColor,
+                        width: settings.connectorWidth,
+                        label: settings.connectorLabel,
+                },
+                snapSettings: { enabled: settings.snapToAnchors, tolerance: settings.snapTolerance },
+                settings,
                 pendingTemplate: null,
                 grouping: { causalGroups: [] },
                 layout: { causalPositions: null },
                 statusRollup: new Map(),
         };
+
+        applySettings(state, settings);
+
+        return state;
+}
+
+export function applySettings(state, settings) {
+        const merged = {
+                ...defaultSettings,
+                ...(state.settings || {}),
+                ...settings,
+        };
+        state.settings = merged;
+        state.myCursor.label = merged.cursorLabel || defaultSettings.cursorLabel;
+        state.myCursor.color = merged.cursorColor || defaultSettings.cursorColor;
+        state.strokeSettings = {
+                width: Math.max(1, Number(merged.strokeWidth) || defaultSettings.strokeWidth),
+                smoothing: clamp(isNaN(merged.strokeSmoothing) ? defaultSettings.strokeSmoothing : merged.strokeSmoothing, 0, 1),
+        };
+        state.connectorDefaults = {
+                color: merged.connectorColor || defaultSettings.connectorColor,
+                width: Math.max(1, Number(merged.connectorWidth) || defaultSettings.connectorWidth),
+                label: merged.connectorLabel ?? defaultSettings.connectorLabel,
+        };
+        state.snapSettings = {
+                enabled: merged.snapToAnchors !== false,
+                tolerance: Math.max(0, Number(merged.snapTolerance) || defaultSettings.snapTolerance),
+        };
+        persistSettings(merged);
+}
+
+export function resetSettings(state) {
+        applySettings(state, defaultSettings);
 }
 
 export function setStatus(element, msg) {

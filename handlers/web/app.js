@@ -1,4 +1,13 @@
-import { createInitialState, recomputeStatusViews, refreshGroupingMetadata, setStatus, setTool } from './state.js';
+import {
+        applySettings,
+        createInitialState,
+        defaultSettings,
+        recomputeStatusViews,
+        refreshGroupingMetadata,
+        resetSettings,
+        setStatus,
+        setTool,
+} from './state.js';
 import { createRenderer } from './rendering.js';
 import { createBoardApi } from './board.js';
 import { createEditors } from './editors.js';
@@ -22,6 +31,14 @@ import { computeCausalLayout } from './layout.js';
         const applyGroupBtn = document.getElementById('apply-group');
         const groupInput = document.getElementById('group-name');
         const groupSuggestions = document.getElementById('group-suggestions');
+        const settingsModal = document.getElementById('settings-modal');
+        const settingsForm = document.getElementById('settings-form');
+        const openSettingsBtn = document.getElementById('open-settings');
+        const closeSettingsBtn = document.getElementById('close-settings');
+        const closeSettingsFooterBtn = document.getElementById('close-settings-footer');
+        const resetSettingsBtn = document.getElementById('reset-settings');
+        const settingsDismiss = document.getElementById('settings-dismiss');
+        const settingsSummary = document.getElementById('settings-summary');
         const state = createInitialState(window.initialBoardID);
 
         const renderer = createRenderer(ctx, canvas, state);
@@ -29,6 +46,7 @@ import { computeCausalLayout } from './layout.js';
         const editors = createEditors(state, renderer, () => boardApi.syncBoard());
 
         setupTemplatePicker();
+        setupSettingsPanel();
 
         function resizeCanvas() {
                 const rect = canvas.getBoundingClientRect();
@@ -448,15 +466,14 @@ import { computeCausalLayout } from './layout.js';
         }
 
         function makeConnector(start, end) {
-                const connector = {
+                return {
                         id: uid(),
                         from: renderer.snapToAnchor(start),
                         to: renderer.snapToAnchor(end),
-                        color: '#fbbf24',
-                        width: 2,
-                        label: 'flow',
+                        color: state.connectorDefaults?.color || '#fbbf24',
+                        width: state.connectorDefaults?.width || 2,
+                        label: state.connectorDefaults?.label || 'flow',
                 };
-                return connector;
         }
 
         function makeCausalNode(position) {
@@ -593,6 +610,85 @@ import { computeCausalLayout } from './layout.js';
                         option.value = group;
                         groupSuggestions.appendChild(option);
                 });
+        }
+
+        function setupSettingsPanel() {
+                if (!settingsModal || !settingsForm || !openSettingsBtn) return;
+
+                const closeButtons = [closeSettingsBtn, closeSettingsFooterBtn, settingsDismiss];
+                closeButtons.filter(Boolean).forEach((btn) =>
+                        btn.addEventListener('click', () => hideSettingsModal()),
+                );
+
+                openSettingsBtn.addEventListener('click', () => {
+                        populateSettingsForm();
+                        refreshSettingsSummary();
+                        settingsModal.classList.add('visible');
+                        settingsModal.setAttribute('aria-hidden', 'false');
+                });
+
+                settingsForm.addEventListener('input', () => applySettingsFromForm());
+
+                resetSettingsBtn?.addEventListener('click', () => {
+                        resetSettings(state);
+                        populateSettingsForm();
+                        renderer.render();
+                        state.lastCursorSent = 0;
+                        boardApi.maybeSendCursor(state.myCursor.position);
+                        refreshSettingsSummary();
+                });
+
+                populateSettingsForm();
+                refreshSettingsSummary();
+        }
+
+        function hideSettingsModal() {
+                if (!settingsModal) return;
+                settingsModal.classList.remove('visible');
+                settingsModal.setAttribute('aria-hidden', 'true');
+        }
+
+        function populateSettingsForm() {
+                if (!settingsForm) return;
+                const settings = state.settings || defaultSettings;
+                settingsForm.cursorLabel.value = settings.cursorLabel || '';
+                settingsForm.cursorColor.value = settings.cursorColor || defaultSettings.cursorColor;
+                settingsForm.strokeWidth.value = state.strokeSettings?.width || settings.strokeWidth;
+                settingsForm.strokeSmoothing.value = state.strokeSettings?.smoothing ?? settings.strokeSmoothing;
+                settingsForm.connectorColor.value = settings.connectorColor || defaultSettings.connectorColor;
+                settingsForm.connectorWidth.value = state.connectorDefaults?.width || settings.connectorWidth;
+                settingsForm.connectorLabel.value = settings.connectorLabel || '';
+                settingsForm.snapToAnchors.checked = state.snapSettings?.enabled !== false;
+                settingsForm.snapTolerance.value = state.snapSettings?.tolerance ?? settings.snapTolerance;
+        }
+
+        function applySettingsFromForm() {
+                if (!settingsForm) return;
+                const updates = {
+                        cursorLabel: settingsForm.cursorLabel.value || defaultSettings.cursorLabel,
+                        cursorColor: settingsForm.cursorColor.value || defaultSettings.cursorColor,
+                        strokeWidth: Number(settingsForm.strokeWidth.value) || defaultSettings.strokeWidth,
+                        strokeSmoothing: Number(settingsForm.strokeSmoothing.value),
+                        connectorColor: settingsForm.connectorColor.value || defaultSettings.connectorColor,
+                        connectorWidth: Number(settingsForm.connectorWidth.value) || defaultSettings.connectorWidth,
+                        connectorLabel: settingsForm.connectorLabel.value,
+                        snapToAnchors: settingsForm.snapToAnchors.checked,
+                        snapTolerance: Number(settingsForm.snapTolerance.value),
+                };
+                applySettings(state, updates);
+                renderer.render(meta);
+                state.lastCursorSent = 0;
+                boardApi.maybeSendCursor(state.myCursor.position);
+                refreshSettingsSummary();
+        }
+
+        function refreshSettingsSummary() {
+                if (!settingsSummary) return;
+                const snap = state.snapSettings?.enabled !== false;
+                const connectorLabel = state.connectorDefaults?.label
+                        ? `, label "${state.connectorDefaults.label}"`
+                        : '';
+                settingsSummary.textContent = `Cursor: ${state.myCursor.label} (${state.myCursor.color}) · Pen: ${state.strokeSettings.width}px, smoothing ${state.strokeSettings.smoothing.toFixed(2)} · Connector: ${state.connectorDefaults.width}px ${state.connectorDefaults.color}${connectorLabel} · Snap: ${snap ? 'on' : 'off'} @ ${state.snapSettings.tolerance}px`;
         }
 
         resizeCanvas();
