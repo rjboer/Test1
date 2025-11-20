@@ -123,8 +123,8 @@ export function createRenderer(ctx, canvas, state) {
                 const start = toScreenPoint(startWorld, state);
                 const end = toScreenPoint(endWorld, state);
                 ctx.save();
-                ctx.strokeStyle = conn.color || '#fbbf24';
-                ctx.lineWidth = Math.max(1, (conn.width || 2) * state.scale);
+                ctx.strokeStyle = conn.color || state.connectorDefaults?.color || '#fbbf24';
+                ctx.lineWidth = Math.max(1, (conn.width || state.connectorDefaults?.width || 2) * state.scale);
                 ctx.beginPath();
                 ctx.moveTo(start.x, start.y);
                 ctx.lineTo(end.x, end.y);
@@ -338,9 +338,9 @@ export function createRenderer(ctx, canvas, state) {
                 const preview = {
                         from: snapToAnchor(drawing.start),
                         to: snapToAnchor(drawing.current),
-                        color: '#fbbf24',
-                        width: 2,
-                        label: 'flow',
+                        color: state.connectorDefaults?.color || '#fbbf24',
+                        width: state.connectorDefaults?.width || 2,
+                        label: state.connectorDefaults?.label,
                 };
 
                 ctx.save();
@@ -617,8 +617,9 @@ export function createRenderer(ctx, canvas, state) {
         }
 
         function snapToAnchor(point) {
-                const SNAP_DISTANCE = 32;
-                if (!state.board || !state.board.shapes.length) {
+                const snappingEnabled = state.snapSettings?.enabled !== false;
+                const tolerance = clamp(Number(state.snapSettings?.tolerance) || 0, 0, 240);
+                if (!snappingEnabled || !state.board || !state.board.shapes.length || tolerance <= 0) {
                         return { point };
                 }
 
@@ -627,7 +628,7 @@ export function createRenderer(ctx, canvas, state) {
                         const anchors = getShapeAnchors(shape);
                         Object.entries(anchors).forEach(([side, anchorPoint]) => {
                                 const dist = distance(point, anchorPoint);
-                                if (dist <= SNAP_DISTANCE && (!closest || dist < closest.dist)) {
+                                if (dist <= tolerance && (!closest || dist < closest.dist)) {
                                         closest = { dist, anchor: { shapeId: shape.id, side, point: anchorPoint } };
                                 }
                         });
