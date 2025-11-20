@@ -1,4 +1,4 @@
-import { refreshGroupingMetadata } from './state.js';
+import { recomputeStatusViews, refreshGroupingMetadata } from './state.js';
 
 export function createBoardApi(state, renderer, setStatus, meta, onBoardChange) {
         async function loadBoard() {
@@ -10,6 +10,7 @@ export function createBoardApi(state, renderer, setStatus, meta, onBoardChange) 
                         const board = normalizeBoard(await res.json());
                         state.board = board;
                         refreshGroupingMetadata(state);
+                        recomputeStatusViews(state);
                         if (onBoardChange) onBoardChange(state.board);
                         renderer.render(meta);
                         renderer.renderMeta(meta);
@@ -58,6 +59,7 @@ export function createBoardApi(state, renderer, setStatus, meta, onBoardChange) 
                 case 'board.created':
                         state.board = normalizeBoard(event.data);
                         refreshGroupingMetadata(state);
+                        recomputeStatusViews(state);
                         if (onBoardChange) onBoardChange(state.board);
                         renderer.renderMeta(meta);
                         renderer.render();
@@ -127,5 +129,8 @@ function normalizeCausalNodes(nodes) {
         return (nodes || []).map((node) => ({
                 ...node,
                 group: node.group || null,
+                status: node.status || 'unknown',
+                confidence: typeof node.confidence === 'number' ? node.confidence : 0,
+                evidence: node.evidence || [],
         }));
 }

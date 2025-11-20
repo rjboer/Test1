@@ -47,11 +47,26 @@ type Connector struct {
 
 // CausalNode represents a factor or effect in a causal diagram.
 type CausalNode struct {
-	ID       string `json:"id"`
-	Kind     string `json:"kind"`
-	Label    string `json:"label"`
-	Position Point  `json:"position"`
-	Color    string `json:"color"`
+	ID              string         `json:"id"`
+	Kind            string         `json:"kind"`
+	Label           string         `json:"label"`
+	Position        Point          `json:"position"`
+	Color           string         `json:"color"`
+	Status          string         `json:"status,omitempty"`
+	Confidence      float64        `json:"confidence,omitempty"`
+	StatusUpdatedAt time.Time      `json:"statusUpdatedAt,omitempty"`
+	Evidence        []NodeEvidence `json:"evidence,omitempty"`
+}
+
+// NodeEvidence captures how an upstream node contributes to the current node's state.
+type NodeEvidence struct {
+	SourceID     string  `json:"sourceId"`
+	SourceLabel  string  `json:"sourceLabel,omitempty"`
+	Status       string  `json:"status,omitempty"`
+	Confidence   float64 `json:"confidence,omitempty"`
+	Polarity     string  `json:"polarity,omitempty"`
+	Weight       float64 `json:"weight,omitempty"`
+	Contribution float64 `json:"contribution,omitempty"`
 }
 
 // CausalLink connects two causal nodes with a signed, weighted relationship.
