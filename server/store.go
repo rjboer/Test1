@@ -92,6 +92,8 @@ func copyBoard(src models.Board) models.Board {
 		copyConn.To = copyAnchor(conn.To)
 		dst.Connectors[i] = copyConn
 	}
+	dst.CausalNodes = append([]models.CausalNode(nil), src.CausalNodes...)
+	dst.CausalLinks = append([]models.CausalLink(nil), src.CausalLinks...)
 	dst.Comments = append([]models.Comment(nil), src.Comments...)
 	return dst
 }

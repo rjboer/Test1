@@ -218,6 +218,205 @@ export function createEditors(state, renderer, onCommit) {
                 activeEditor = wrapper;
         }
 
+        function openCausalNodeEditor(node, canvas) {
+                hideEditor();
+                const wrapper = document.createElement('div');
+                wrapper.style.position = 'absolute';
+                wrapper.style.padding = '10px';
+                wrapper.style.background = 'rgba(255, 255, 255, 0.98)';
+                wrapper.style.border = '1px solid #9ca3af';
+                wrapper.style.borderRadius = '10px';
+                wrapper.style.boxShadow = '0 12px 30px rgba(0, 0, 0, 0.25)';
+                wrapper.style.width = '220px';
+                wrapper.style.zIndex = '35';
+
+                const title = document.createElement('div');
+                title.textContent = 'Causal node';
+                title.style.fontWeight = '600';
+                title.style.marginBottom = '8px';
+                wrapper.appendChild(title);
+
+                const label = document.createElement('label');
+                label.textContent = 'Label';
+                label.style.display = 'block';
+                label.style.fontSize = '12px';
+                label.style.marginBottom = '4px';
+                wrapper.appendChild(label);
+
+                const input = document.createElement('input');
+                input.type = 'text';
+                input.value = node.label || '';
+                input.placeholder = 'e.g. Demand';
+                input.style.width = '100%';
+                input.style.marginBottom = '8px';
+                wrapper.appendChild(input);
+
+                const kindLabel = document.createElement('label');
+                kindLabel.textContent = 'Kind';
+                kindLabel.style.display = 'block';
+                kindLabel.style.fontSize = '12px';
+                kindLabel.style.marginBottom = '4px';
+                wrapper.appendChild(kindLabel);
+
+                const select = document.createElement('select');
+                ['variable', 'cause', 'effect'].forEach((kind) => {
+                        const opt = document.createElement('option');
+                        opt.value = kind;
+                        opt.textContent = kind.charAt(0).toUpperCase() + kind.slice(1);
+                        select.appendChild(opt);
+                });
+                select.value = node.kind || 'variable';
+                select.style.width = '100%';
+                select.style.marginBottom = '8px';
+                wrapper.appendChild(select);
+
+                const actions = document.createElement('div');
+                actions.style.display = 'flex';
+                actions.style.gap = '8px';
+
+                const save = document.createElement('button');
+                save.textContent = 'Save';
+                save.style.flex = '1';
+                const cancel = document.createElement('button');
+                cancel.textContent = 'Cancel';
+                cancel.type = 'button';
+                cancel.style.flex = '1';
+
+                actions.appendChild(cancel);
+                actions.appendChild(save);
+                wrapper.appendChild(actions);
+
+                const commit = () => {
+                        node.label = input.value || 'Node';
+                        node.kind = select.value || 'variable';
+                        node.color = node.color || colorForKind(node.kind);
+                        hideEditor();
+                        onCommit();
+                        renderer.render();
+                };
+
+                save.addEventListener('click', commit);
+                cancel.addEventListener('click', () => hideEditor());
+
+                const page = worldToPage(node.position, canvas);
+                wrapper.style.left = `${page.x}px`;
+                wrapper.style.top = `${page.y}px`;
+
+                document.body.appendChild(wrapper);
+                activeEditor = wrapper;
+                input.focus();
+        }
+
+        function openCausalLinkEditor(link, position, canvas) {
+                hideEditor();
+                const wrapper = document.createElement('div');
+                wrapper.style.position = 'absolute';
+                wrapper.style.padding = '10px';
+                wrapper.style.background = 'rgba(255, 255, 255, 0.98)';
+                wrapper.style.border = '1px solid #9ca3af';
+                wrapper.style.borderRadius = '10px';
+                wrapper.style.boxShadow = '0 12px 30px rgba(0, 0, 0, 0.25)';
+                wrapper.style.width = '240px';
+                wrapper.style.zIndex = '35';
+
+                const heading = document.createElement('div');
+                heading.textContent = 'Causal link';
+                heading.style.fontWeight = '600';
+                heading.style.marginBottom = '8px';
+                wrapper.appendChild(heading);
+
+                const labelField = document.createElement('input');
+                labelField.type = 'text';
+                labelField.placeholder = 'Label (optional)';
+                labelField.value = link.label || '';
+                labelField.style.width = '100%';
+                labelField.style.marginBottom = '8px';
+                wrapper.appendChild(labelField);
+
+                const polarityLabel = document.createElement('label');
+                polarityLabel.textContent = 'Polarity';
+                polarityLabel.style.display = 'block';
+                polarityLabel.style.fontSize = '12px';
+                polarityLabel.style.marginBottom = '4px';
+                wrapper.appendChild(polarityLabel);
+
+                const polarity = document.createElement('select');
+                ['positive', 'negative', 'neutral'].forEach((p) => {
+                        const opt = document.createElement('option');
+                        opt.value = p;
+                        opt.textContent = p.charAt(0).toUpperCase() + p.slice(1);
+                        polarity.appendChild(opt);
+                });
+                polarity.value = link.polarity || 'positive';
+                polarity.style.width = '100%';
+                polarity.style.marginBottom = '8px';
+                wrapper.appendChild(polarity);
+
+                const weightLabel = document.createElement('label');
+                weightLabel.textContent = 'Weight';
+                weightLabel.style.display = 'block';
+                weightLabel.style.fontSize = '12px';
+                weightLabel.style.marginBottom = '4px';
+                wrapper.appendChild(weightLabel);
+
+                const weight = document.createElement('input');
+                weight.type = 'number';
+                weight.step = '0.1';
+                weight.min = '0';
+                weight.value = typeof link.weight === 'number' ? link.weight : 1;
+                weight.style.width = '100%';
+                weight.style.marginBottom = '8px';
+                wrapper.appendChild(weight);
+
+                const actions = document.createElement('div');
+                actions.style.display = 'flex';
+                actions.style.gap = '8px';
+
+                const save = document.createElement('button');
+                save.textContent = 'Save';
+                save.style.flex = '1';
+                const cancel = document.createElement('button');
+                cancel.textContent = 'Cancel';
+                cancel.type = 'button';
+                cancel.style.flex = '1';
+
+                actions.appendChild(cancel);
+                actions.appendChild(save);
+                wrapper.appendChild(actions);
+
+                const commit = () => {
+                        link.label = labelField.value || '';
+                        link.polarity = polarity.value || 'positive';
+                        const parsed = parseFloat(weight.value);
+                        link.weight = Number.isFinite(parsed) ? parsed : 1;
+                        hideEditor();
+                        onCommit();
+                        renderer.render();
+                };
+
+                save.addEventListener('click', commit);
+                cancel.addEventListener('click', () => hideEditor());
+
+                const page = worldToPage(position, canvas);
+                wrapper.style.left = `${page.x}px`;
+                wrapper.style.top = `${page.y}px`;
+
+                document.body.appendChild(wrapper);
+                activeEditor = wrapper;
+                labelField.focus();
+        }
+
+        function colorForKind(kind) {
+                switch (kind) {
+                case 'cause':
+                        return '#10b981';
+                case 'effect':
+                        return '#3b82f6';
+                default:
+                        return '#f59e0b';
+                }
+        }
+
         function makeText(content, position) {
                 return {
                         id: uid(),
@@ -249,5 +448,5 @@ export function createEditors(state, renderer, onCommit) {
                 };
         }
 
-        return { openTextEditor, openNoteEditor, openCommentEditor, hideEditor };
+        return { openTextEditor, openNoteEditor, openCommentEditor, openCausalNodeEditor, openCausalLinkEditor, hideEditor, colorForKind };
 }

@@ -13,9 +13,11 @@ export function createRenderer(ctx, canvas, state) {
                         return;
                 }
 
+                state.board.causalLinks.forEach(drawCausalLink);
                 state.board.connectors.forEach(drawConnector);
                 state.board.shapes.forEach(drawShape);
                 state.board.strokes.forEach(drawStroke);
+                state.board.causalNodes.forEach(drawCausalNode);
                 state.board.notes.forEach(drawNote);
                 state.board.texts.forEach(drawText);
                 state.board.comments.forEach(drawCommentPin);
@@ -128,6 +130,60 @@ export function createRenderer(ctx, canvas, state) {
                 ctx.restore();
         }
 
+        function drawCausalLink(link) {
+                const fromNode = findCausalNode(link.from) || { position: link.from };
+                const toNode = findCausalNode(link.to) || { position: link.to };
+                if (!fromNode?.position || !toNode?.position) return;
+
+                const start = toScreenPoint(fromNode.position, state);
+                const end = toScreenPoint(toNode.position, state);
+                const width = Math.max(1.5, (link.weight || 1) * state.scale);
+                const color = polarityColor(link.polarity);
+                ctx.save();
+                ctx.strokeStyle = color;
+                ctx.lineWidth = width;
+                ctx.beginPath();
+                ctx.moveTo(start.x, start.y);
+                ctx.lineTo(end.x, end.y);
+                ctx.stroke();
+                drawArrowhead(start, end, color);
+
+                const mid = { x: (start.x + end.x) / 2, y: (start.y + end.y) / 2 };
+                const label = linkLabel(link);
+                if (label) {
+                        ctx.fillStyle = 'rgba(0,0,0,0.75)';
+                        ctx.strokeStyle = 'rgba(0,0,0,0.45)';
+                        ctx.lineWidth = 10;
+                        const metrics = ctx.measureText(label);
+                        ctx.strokeRect(mid.x - 6, mid.y - 14, metrics.width + 12, 24);
+                        ctx.fillStyle = '#f9fafb';
+                        ctx.textAlign = 'left';
+                        ctx.textBaseline = 'middle';
+                        ctx.fillText(label, mid.x, mid.y);
+                }
+                ctx.restore();
+        }
+
+        function drawCausalNode(node) {
+                const pos = toScreenPoint(node.position, state);
+                const radius = 28 * state.scale;
+                const color = node.color || polarityColor('neutral');
+                ctx.save();
+                ctx.fillStyle = color;
+                ctx.strokeStyle = '#0b1224';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.arc(pos.x, pos.y, radius, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.stroke();
+                ctx.fillStyle = '#0b1224';
+                ctx.font = `${14 * state.scale}px "Inter", sans-serif`;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(node.label || 'Node', pos.x, pos.y);
+                ctx.restore();
+        }
+
         function drawArrowhead(start, end, color) {
                 const angle = Math.atan2(end.y - start.y, end.x - start.x);
                 const size = 8 + state.scale * 2;
@@ -233,6 +289,11 @@ export function createRenderer(ctx, canvas, state) {
                         return;
                 }
 
+                if (drawing.tool === 'causal-link') {
+                        drawCausalLinkPreview(drawing);
+                        return;
+                }
+
                 const start = toScreenPoint(drawing.start, state);
                 const end = toScreenPoint(drawing.current, state);
                 ctx.save();
@@ -259,6 +320,19 @@ export function createRenderer(ctx, canvas, state) {
                 ctx.save();
                 ctx.globalAlpha = 0.7;
                 drawConnector(preview);
+                ctx.restore();
+        }
+
+        function drawCausalLinkPreview(drawing) {
+                const preview = {
+                        from: drawing.start,
+                        to: drawing.current,
+                        polarity: 'positive',
+                        weight: 1,
+                };
+                ctx.save();
+                ctx.globalAlpha = 0.65;
+                drawCausalLink(preview);
                 ctx.restore();
         }
 
@@ -301,7 +375,7 @@ export function createRenderer(ctx, canvas, state) {
         function renderMeta(metaEl) {
                 if (!state.board || !metaEl) return;
                 const updated = new Date(state.board.updatedAt).toLocaleTimeString();
-                metaEl.innerHTML = `ID: ${state.board.id}<br/>Name: ${state.board.name}<br/>Shapes: ${state.board.shapes.length}<br/>Notes: ${state.board.notes.length}<br/>Texts: ${state.board.texts.length}<br/>Connectors: ${state.board.connectors.length}<br/>Comments: ${state.board.comments.length}<br/>Updated: ${updated}`;
+                metaEl.innerHTML = `ID: ${state.board.id}<br/>Name: ${state.board.name}<br/>Shapes: ${state.board.shapes.length}<br/>Notes: ${state.board.notes.length}<br/>Texts: ${state.board.texts.length}<br/>Connectors: ${state.board.connectors.length}<br/>Causal nodes: ${state.board.causalNodes.length}<br/>Causal links: ${state.board.causalLinks.length}<br/>Comments: ${state.board.comments.length}<br/>Updated: ${updated}`;
         }
 
         function pruneCursors() {
@@ -361,6 +435,16 @@ export function createRenderer(ctx, canvas, state) {
                                 height: size,
                         };
                 }
+                case 'causal-node': {
+                        if (!hit.item?.position) return null;
+                        const radius = 28;
+                        return {
+                                x: hit.item.position.x - radius,
+                                y: hit.item.position.y - radius,
+                                width: radius * 2,
+                                height: radius * 2,
+                        };
+                }
                 default:
                         return null;
                 }
@@ -379,6 +463,8 @@ export function createRenderer(ctx, canvas, state) {
                 if (text) return { type: 'text', item: text };
                 const note = hitNote(world);
                 if (note) return { type: 'note', item: note };
+                const causalNode = hitCausalNode(world);
+                if (causalNode) return { type: 'causal-node', item: causalNode };
                 const shape = hitShape(world);
                 if (shape) return { type: 'shape', item: shape };
                 return null;
@@ -414,6 +500,32 @@ export function createRenderer(ctx, canvas, state) {
                         if (!bounds) continue;
                         if (world.x >= bounds.x && world.x <= bounds.x + bounds.width && world.y >= bounds.y - bounds.height && world.y <= bounds.y + 4) {
                                 return text;
+                        }
+                }
+                return null;
+        }
+
+        function hitCausalNode(world) {
+                for (let i = state.board.causalNodes.length - 1; i >= 0; i -= 1) {
+                        const node = state.board.causalNodes[i];
+                        const radius = 28;
+                        const dist = distance(world, node.position);
+                        if (dist <= radius) {
+                                return node;
+                        }
+                }
+                return null;
+        }
+
+        function hitCausalLink(world) {
+                const tolerance = 10;
+                for (let i = state.board.causalLinks.length - 1; i >= 0; i -= 1) {
+                        const link = state.board.causalLinks[i];
+                        const points = causalLinkPoints(link);
+                        if (!points) continue;
+                        const d = pointToSegmentDistance(world, points.from, points.to);
+                        if (d <= tolerance) {
+                                return { link, midpoint: { x: (points.from.x + points.to.x) / 2, y: (points.from.y + points.to.y) / 2 } };
                         }
                 }
                 return null;
@@ -507,6 +619,50 @@ export function createRenderer(ctx, canvas, state) {
                 return null;
         }
 
+        function polarityColor(polarity) {
+                switch (polarity) {
+                case 'negative':
+                        return '#f87171';
+                case 'neutral':
+                        return '#fbbf24';
+                default:
+                        return '#34d399';
+                }
+        }
+
+        function linkLabel(link) {
+                const parts = [];
+                if (link.label) parts.push(link.label);
+                if (link.polarity) parts.push(link.polarity === 'negative' ? '−' : link.polarity === 'neutral' ? '0' : '+');
+                if (typeof link.weight === 'number') parts.push(`w=${link.weight}`);
+                return parts.join(' ').trim();
+        }
+
+        function findCausalNode(id) {
+                return state.board?.causalNodes.find((node) => node.id === id);
+        }
+
+        function causalLinkPoints(link) {
+                const fromNode = findCausalNode(link.from) || { position: link.from };
+                const toNode = findCausalNode(link.to) || { position: link.to };
+                if (!fromNode?.position || !toNode?.position) return null;
+                return { from: fromNode.position, to: toNode.position };
+        }
+
+        function getCausalLinkMidpoint(link) {
+                const pts = causalLinkPoints(link);
+                if (!pts) return { x: 0, y: 0 };
+                return { x: (pts.from.x + pts.to.x) / 2, y: (pts.from.y + pts.to.y) / 2 };
+        }
+
+        function pointToSegmentDistance(p, a, b) {
+                const l2 = distance(a, b) ** 2;
+                if (l2 === 0) return distance(p, a);
+                const t = Math.max(0, Math.min(1, ((p.x - a.x) * (b.x - a.x) + (p.y - a.y) * (b.y - a.y)) / l2));
+                const projection = { x: a.x + t * (b.x - a.x), y: a.y + t * (b.y - a.y) };
+                return distance(p, projection);
+        }
+
         function wrapText(text, x, y, maxWidth, lineHeight) {
                 if (!text) return;
                 const words = text.split(' ');
@@ -533,6 +689,8 @@ export function createRenderer(ctx, canvas, state) {
                 anchorToPoint,
                 getBounds,
                 hitTest,
+                hitCausalNode,
+                hitCausalLink,
                 hitComment: (world) => {
                         const screenPoint = toScreenPoint(world, state);
                         const radius = 14;
@@ -546,5 +704,6 @@ export function createRenderer(ctx, canvas, state) {
                 handlePositions,
                 getSelectionBounds,
                 measureTextWidth,
+                getCausalLinkMidpoint,
         };
 }

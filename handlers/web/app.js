@@ -86,7 +86,34 @@ import { instantiateTemplate, templates } from './templates.js';
                         return;
                 }
 
+                if (state.tool === 'causal-node' && e.button === 0) {
+                        const node = makeCausalNode(world);
+                        state.board.causalNodes.push(node);
+                        renderer.render();
+                        editors.openCausalNodeEditor(node, canvas);
+                        boardApi.syncBoard();
+                        return;
+                }
+
+                if (state.tool === 'causal-link' && e.button === 0) {
+                        const startNode = renderer.hitCausalNode(world);
+                        if (startNode) {
+                                state.drawing = {
+                                        tool: 'causal-link',
+                                        start: startNode.position,
+                                        current: world,
+                                        startNodeId: startNode.id,
+                                };
+                        }
+                        return;
+                }
+
                 if (state.tool === 'select' && e.button === 0 && !hit) {
+                        const linkHit = renderer.hitCausalLink(world);
+                        if (linkHit?.link) {
+                                editors.openCausalLinkEditor(linkHit.link, linkHit.midpoint, canvas);
+                                return;
+                        }
                         state.marquee = { start: world, current: world };
                         state.drawing = { tool: 'select', start: world, current: world };
                         renderer.render();
@@ -190,6 +217,16 @@ import { instantiateTemplate, templates } from './templates.js';
                 if (!state.board) return;
                 const world = toWorld(e, canvas, state);
                 const note = renderer.hitTest(world)?.item;
+                const causalNode = renderer.hitCausalNode(world);
+                const linkHit = renderer.hitCausalLink(world);
+                if (causalNode) {
+                        editors.openCausalNodeEditor(causalNode, canvas);
+                        return;
+                }
+                if (linkHit?.link) {
+                        editors.openCausalLinkEditor(linkHit.link, linkHit.midpoint, canvas);
+                        return;
+                }
                 if (note?.content !== undefined && note.width !== undefined) {
                         editors.openNoteEditor(note.position, note.content, note, true, () => {
                                 boardApi.syncBoard();
@@ -355,6 +392,17 @@ import { instantiateTemplate, templates } from './templates.js';
                 case 'connector':
                         state.board.connectors.push(makeConnector(drawing.start, world));
                         break;
+                case 'causal-link': {
+                        const endNode = renderer.hitCausalNode(world);
+                        if (drawing.startNodeId && endNode?.id && drawing.startNodeId !== endNode.id) {
+                                const link = makeCausalLink(drawing.startNodeId, endNode.id);
+                                state.board.causalLinks.push(link);
+                                renderer.render();
+                                editors.openCausalLinkEditor(link, renderer.getCausalLinkMidpoint(link), canvas);
+                                boardApi.syncBoard();
+                        }
+                        return;
+                }
                 case 'text': {
                         editors.openTextEditor(world, '', null, false, () => {
                                 renderer.render();
@@ -400,12 +448,34 @@ import { instantiateTemplate, templates } from './templates.js';
                 return connector;
         }
 
+        function makeCausalNode(position) {
+                return {
+                        id: uid(),
+                        position,
+                        label: 'Variable',
+                        kind: 'variable',
+                        color: editors.colorForKind('variable'),
+                };
+        }
+
+        function makeCausalLink(from, to) {
+                return {
+                        id: uid(),
+                        from,
+                        to,
+                        polarity: 'positive',
+                        weight: 1,
+                        label: 'influences',
+                };
+        }
+
         function deleteSelection() {
                 if (!state.selection?.items?.length) return;
                 const ids = new Set(state.selection.items.map((item) => item.hit.item.id));
                 state.board.shapes = state.board.shapes.filter((shape) => !ids.has(shape.id));
                 state.board.notes = state.board.notes.filter((note) => !ids.has(note.id));
                 state.board.texts = state.board.texts.filter((text) => !ids.has(text.id));
+                state.board.causalNodes = state.board.causalNodes.filter((node) => !ids.has(node.id));
                 clearSelection(state);
                 renderer.render();
                 boardApi.syncBoard();

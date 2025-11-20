@@ -24,6 +24,8 @@ export function createBoardApi(state, renderer, setStatus, meta) {
                         texts: board.texts || [],
                         notes: board.notes || [],
                         connectors: normalizeConnectors(board.connectors || []),
+                        causalNodes: board.causalNodes || [],
+                        causalLinks: board.causalLinks || [],
                         comments: board.comments || [],
                 };
         }
@@ -71,6 +73,8 @@ export function createBoardApi(state, renderer, setStatus, meta) {
                 if (!state.board) return;
                 const normalizedConnectors = normalizeConnectors(state.board.connectors);
                 state.board.connectors = normalizedConnectors;
+                state.board.causalLinks = state.board.causalLinks || [];
+                state.board.causalNodes = state.board.causalNodes || [];
                 setStatus('Syncing…');
                 try {
                         const payload = { ...state.board, connectors: normalizedConnectors };

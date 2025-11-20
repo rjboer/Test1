@@ -45,6 +45,25 @@ type Connector struct {
 	Label string  `json:"label"`
 }
 
+// CausalNode represents a factor or effect in a causal diagram.
+type CausalNode struct {
+	ID       string `json:"id"`
+	Kind     string `json:"kind"`
+	Label    string `json:"label"`
+	Position Point  `json:"position"`
+	Color    string `json:"color"`
+}
+
+// CausalLink connects two causal nodes with a signed, weighted relationship.
+type CausalLink struct {
+	ID       string  `json:"id"`
+	From     string  `json:"from"`
+	To       string  `json:"to"`
+	Polarity string  `json:"polarity"`
+	Weight   float64 `json:"weight"`
+	Label    string  `json:"label"`
+}
+
 // TextItem represents a text element on the board.
 type TextItem struct {
 	ID       string `json:"id"`
@@ -83,15 +102,17 @@ type Cursor struct {
 
 // Board is the aggregate of all collaborative items.
 type Board struct {
-	ID         string       `json:"id"`
-	Name       string       `json:"name"`
-	Shapes     []Shape      `json:"shapes"`
-	Strokes    []Stroke     `json:"strokes"`
-	Texts      []TextItem   `json:"texts"`
-	Notes      []StickyNote `json:"notes"`
-	Connectors []Connector  `json:"connectors"`
-	Comments   []Comment    `json:"comments"`
-	UpdatedAt  time.Time    `json:"updatedAt"`
+	ID          string       `json:"id"`
+	Name        string       `json:"name"`
+	Shapes      []Shape      `json:"shapes"`
+	Strokes     []Stroke     `json:"strokes"`
+	Texts       []TextItem   `json:"texts"`
+	Notes       []StickyNote `json:"notes"`
+	Connectors  []Connector  `json:"connectors"`
+	CausalNodes []CausalNode `json:"causalNodes"`
+	CausalLinks []CausalLink `json:"causalLinks"`
+	Comments    []Comment    `json:"comments"`
+	UpdatedAt   time.Time    `json:"updatedAt"`
 }
 
 // BoardEvent represents a message sent to subscribers about a board.

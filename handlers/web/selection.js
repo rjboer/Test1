@@ -61,6 +61,12 @@ function applyMove(sel, world) {
                                 sel.dirty = true;
                         }
                         break;
+                case 'causal-node':
+                        if (initial.bounds) {
+                                hit.item.position = { x: initial.bounds.x + dx + initial.bounds.width / 2, y: initial.bounds.y + dy + initial.bounds.height / 2 };
+                                sel.dirty = true;
+                        }
+                        break;
                 default:
                         break;
                 }
