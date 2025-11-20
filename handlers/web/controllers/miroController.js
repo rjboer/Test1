@@ -452,9 +452,20 @@ export function createMiroController(context, elements) {
         function deleteSelection() {
                 if (!state.selection?.items?.length) return;
                 const ids = new Set(state.selection.items.map((item) => item.hit.item.id));
-                state.board.shapes = state.board.shapes.filter((shape) => !ids.has(shape.id));
+                const removedShapeIds = new Set();
+                state.board.shapes = state.board.shapes.filter((shape) => {
+                        const keep = !ids.has(shape.id);
+                        if (!keep) removedShapeIds.add(shape.id);
+                        return keep;
+                });
                 state.board.notes = state.board.notes.filter((note) => !ids.has(note.id));
                 state.board.texts = state.board.texts.filter((text) => !ids.has(text.id));
+                state.board.connectors = state.board.connectors.filter(
+                        (conn) =>
+                                !ids.has(conn.id) &&
+                                !removedShapeIds.has(conn.from?.shapeId) &&
+                                !removedShapeIds.has(conn.to?.shapeId),
+                );
                 clearSelection();
                 render();
                 syncBoard();
