@@ -10,7 +10,7 @@ import (
 )
 
 var (
-	//go:embed web/index.html web/app.js web/styles.css
+	//go:embed web/*
 	webContent embed.FS
 	staticFS   fs.FS
 	indexTmpl  *template.Template
