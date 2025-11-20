@@ -1,4 +1,6 @@
-export function createBoardApi(state, renderer, setStatus, meta) {
+import { refreshGroupingMetadata } from './state.js';
+
+export function createBoardApi(state, renderer, setStatus, meta, onBoardChange) {
         async function loadBoard() {
                 try {
                         const res = await fetch(`/boards/${state.boardId}`);
@@ -7,6 +9,8 @@ export function createBoardApi(state, renderer, setStatus, meta) {
                         }
                         const board = normalizeBoard(await res.json());
                         state.board = board;
+                        refreshGroupingMetadata(state);
+                        if (onBoardChange) onBoardChange(state.board);
                         renderer.render(meta);
                         renderer.renderMeta(meta);
                         connectEvents();
@@ -24,7 +28,7 @@ export function createBoardApi(state, renderer, setStatus, meta) {
                         texts: board.texts || [],
                         notes: board.notes || [],
                         connectors: normalizeConnectors(board.connectors || []),
-                        causalNodes: board.causalNodes || [],
+                        causalNodes: normalizeCausalNodes(board.causalNodes || []),
                         causalLinks: board.causalLinks || [],
                         comments: board.comments || [],
                 };
@@ -53,6 +57,8 @@ export function createBoardApi(state, renderer, setStatus, meta) {
                 case 'board.updated':
                 case 'board.created':
                         state.board = normalizeBoard(event.data);
+                        refreshGroupingMetadata(state);
+                        if (onBoardChange) onBoardChange(state.board);
                         renderer.renderMeta(meta);
                         renderer.render();
                         break;
@@ -115,4 +121,11 @@ function normalizeConnector(connector) {
 
 function normalizeConnectors(connectors) {
         return (connectors || []).map(normalizeConnector);
+}
+
+function normalizeCausalNodes(nodes) {
+        return (nodes || []).map((node) => ({
+                ...node,
+                group: node.group || null,
+        }));
 }
