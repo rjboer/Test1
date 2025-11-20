@@ -6,31 +6,30 @@ import {
         refreshGroupingMetadata,
         resetSettings,
         setStatus,
-        setTool,
 } from './state.js';
 import { createRenderer } from './rendering.js';
 import { createBoardApi } from './board.js';
 import { createEditors } from './editors.js';
-import { startSelection, startSelectionFromHits, updateSelection, clearSelection } from './selection.js';
-import { toWorld, screenToWorld, eventToScreen } from './geometry.js';
-import { clamp, uid } from './utils.js';
-import { instantiateTemplate, templates } from './templates.js';
-import { computeCausalLayout } from './layout.js';
+import { createSharedContext } from './controllers/sharedContext.js';
+import { createMiroController } from './controllers/miroController.js';
+import { createFlyingLogicController } from './controllers/flyingLogicController.js';
 
 (() => {
         const canvas = document.getElementById('board-canvas');
         const ctx = canvas.getContext('2d');
-        const toolbar = document.getElementById('toolbar');
         const status = document.getElementById('status');
         const meta = document.getElementById('board-meta');
         const deleteBtn = document.getElementById('delete-selection');
+
         const templateSelect = document.getElementById('template-select');
         const templateInsertBtn = document.getElementById('template-insert');
         const templateDescription = document.getElementById('template-description');
+
         const autoLayoutBtn = document.getElementById('auto-layout');
         const applyGroupBtn = document.getElementById('apply-group');
         const groupInput = document.getElementById('group-name');
         const groupSuggestions = document.getElementById('group-suggestions');
+
         const settingsModal = document.getElementById('settings-modal');
         const settingsForm = document.getElementById('settings-form');
         const openSettingsBtn = document.getElementById('open-settings');
@@ -39,14 +38,82 @@ import { computeCausalLayout } from './layout.js';
         const resetSettingsBtn = document.getElementById('reset-settings');
         const settingsDismiss = document.getElementById('settings-dismiss');
         const settingsSummary = document.getElementById('settings-summary');
+
+        const modeButtons = document.querySelectorAll('[data-mode]');
+        const miroToolbar = document.getElementById('miro-toolbar');
+        const causalToolbar = document.getElementById('causal-toolbar');
+
         const state = createInitialState(window.initialBoardID);
 
         const renderer = createRenderer(ctx, canvas, state);
         const boardApi = createBoardApi(state, renderer, (msg) => setStatus(status, msg), meta, handleBoardChange);
         const editors = createEditors(state, renderer, () => boardApi.syncBoard());
 
-        setupTemplatePicker();
+        const sharedContext = createSharedContext({
+                canvas,
+                statusEl: status,
+                metaEl: meta,
+                toolbar: miroToolbar,
+                state,
+                renderer,
+                boardApi,
+                editors,
+        });
+
+        const controllers = {
+                miro: createMiroController(sharedContext, {
+                        toolbar: miroToolbar,
+                        deleteBtn,
+                        templateSelect,
+                        templateInsertBtn,
+                        templateDescription,
+                }),
+                causal: createFlyingLogicController(sharedContext, {
+                        toolbar: causalToolbar,
+                        deleteBtn,
+                        autoLayoutBtn,
+                        applyGroupBtn,
+                        groupInput,
+                        groupSuggestions,
+                }),
+        };
+
+        let activeController = null;
+
+        setupModeToggle();
         setupSettingsPanel();
+        resizeCanvas();
+        boardApi.loadBoard();
+        activateController('miro');
+
+        window.addEventListener('resize', resizeCanvas);
+
+        function setupModeToggle() {
+                modeButtons.forEach((btn) => {
+                        btn.addEventListener('click', () => {
+                                const mode = btn.dataset.mode;
+                                activateController(mode);
+                        });
+                });
+        }
+
+        function activateController(mode) {
+                if (activeController?.deactivate) {
+                        activeController.deactivate();
+                }
+                activeController = controllers[mode];
+                modeButtons.forEach((btn) => btn.classList.toggle('active', btn.dataset.mode === mode));
+                miroToolbar?.setAttribute('hidden', mode !== 'miro');
+                causalToolbar?.setAttribute('hidden', mode !== 'causal');
+                activeController?.activate?.();
+        }
+
+        function handleBoardChange() {
+                refreshGroupingMetadata(state);
+                recomputeStatusViews(state);
+                controllers.causal.updateGroupSuggestions?.();
+                renderer.render(meta);
+        }
 
         function resizeCanvas() {
                 const rect = canvas.getBoundingClientRect();
@@ -59,566 +126,11 @@ import { computeCausalLayout } from './layout.js';
                 renderer.render(meta);
         }
 
-        window.addEventListener('resize', resizeCanvas);
-
-        toolbar.addEventListener('click', (e) => {
-                const btn = e.target.closest('button[data-tool]');
-                if (!btn) return;
-                setTool(state, btn.dataset.tool, toolbar);
-                setStatus(status, `Tool: ${state.tool}`);
-        });
-
-        autoLayoutBtn?.addEventListener('click', () => applyAutoLayout());
-        applyGroupBtn?.addEventListener('click', () => assignGroupTag(groupInput?.value || ''));
-        groupInput?.addEventListener('keydown', (evt) => {
-                if (evt.key === 'Enter') assignGroupTag(groupInput?.value || '');
-        });
-
-        deleteBtn.addEventListener('click', () => deleteSelection());
-
-        canvas.addEventListener('contextmenu', (e) => e.preventDefault());
-
-        canvas.addEventListener('mousedown', (e) => {
-                if (!state.board) return;
-                const world = toWorld(e, canvas, state);
-                const screen = eventToScreen(e, canvas);
-                const handle = detectExistingHandle(screen, world);
-                if (state.pendingTemplate && e.button === 0) {
-                        placeTemplate(world);
-                        return;
-                }
-                if (handle) return;
-
-                const hit = renderer.hitTest(world);
-                const rightButton = e.button === 2;
-                if (rightButton || state.tool === 'pan') {
-                        state.pan = {
-                                active: true,
-                                button: e.button,
-                                origin: { x: e.clientX, y: e.clientY },
-                                startOffset: { ...state.offset },
-                        };
-                        setStatus(status, 'Panning');
-                        return;
-                }
-
-                if (e.button === 0) {
-                        const pinned = renderer.hitComment(world);
-                        if (pinned) {
-                                editors.openCommentEditor(pinned.position, pinned, canvas);
-                                return;
-                        }
-                }
-
-                if (state.tool === 'comment' && e.button === 0) {
-                        handleComment(world);
-                        return;
-                }
-
-                if (state.tool === 'causal-node' && e.button === 0) {
-                        const node = makeCausalNode(world);
-                        state.board.causalNodes.push(node);
-                        renderer.render();
-                        editors.openCausalNodeEditor(node, canvas);
-                        boardApi.syncBoard();
-                        return;
-                }
-
-                if (state.tool === 'causal-link' && e.button === 0) {
-                        const startNode = renderer.hitCausalNode(world);
-                        if (startNode) {
-                                state.drawing = {
-                                        tool: 'causal-link',
-                                        start: startNode.position,
-                                        current: world,
-                                        startNodeId: startNode.id,
-                                };
-                        }
-                        return;
-                }
-
-                if (state.tool === 'select' && e.button === 0 && !hit) {
-                        const linkHit = renderer.hitCausalLink(world);
-                        if (linkHit?.link) {
-                                editors.openCausalLinkEditor(linkHit.link, linkHit.midpoint, canvas);
-                                return;
-                        }
-                        state.marquee = { start: world, current: world };
-                        state.drawing = { tool: 'select', start: world, current: world };
-                        renderer.render();
-                        return;
-                }
-
-                if (hit) {
-                        const handleHit = renderer.detectHandleHit(hit, screen);
-                        startSelection(state, hit, world, handleHit, renderer);
-                        renderer.render();
-                        return;
-                }
-
-                clearSelection(state);
-                if (e.button !== 0) return;
-                if (state.tool === 'pen') {
-                        state.drawing = startStroke(world);
-                        renderer.render();
-                        return;
-                }
-                state.drawing = { tool: state.tool, start: world, current: world };
-        });
-
-        canvas.addEventListener('mousemove', (e) => {
-                if (!state.board) return;
-                const world = toWorld(e, canvas, state);
-
-                if (state.pan.active) {
-                        const requiredButton = state.pan.button === 2 ? 2 : 1;
-                        if ((e.buttons & requiredButton) === 0) {
-                                state.pan = { active: false, origin: null, startOffset: null, button: null };
-                                setStatus(status, 'Ready');
-                                return;
-                        }
-                        const dx = e.clientX - state.pan.origin.x;
-                        const dy = e.clientY - state.pan.origin.y;
-                        state.offset = { x: state.pan.startOffset.x + dx, y: state.pan.startOffset.y + dy };
-                        renderer.render();
-                } else if (state.selection && state.selection.dragging) {
-                        updateSelection(state, world, renderer);
-                        renderer.render();
-                } else if (state.marquee) {
-                        state.marquee.current = world;
-                        state.drawing = { tool: 'select', start: state.marquee.start, current: world };
-                        renderer.render();
-                } else if (state.drawing) {
-                        if (state.drawing.tool === 'pen') {
-                                recordStrokePoint(state.drawing, world);
-                                renderer.render();
-                        } else {
-                                state.drawing.current = world;
-                                renderer.render();
-                        }
-                }
-
-                boardApi.maybeSendCursor(world);
-        });
-
-        canvas.addEventListener('mouseup', (e) => {
-                if (!state.board) return;
-                const world = toWorld(e, canvas, state);
-                if (state.pan.active && (state.pan.button === e.button || e.buttons === 0)) {
-                        state.pan = { active: false, origin: null, startOffset: null, button: null };
-                        setStatus(status, 'Ready');
-                        return;
-                }
-                if (state.selection && state.selection.dragging && (e.button === 0 || e.buttons === 0)) {
-                        state.selection.dragging = false;
-                        if (state.selection.dirty) {
-                                boardApi.syncBoard();
-                        }
-                        return;
-                }
-                if (state.marquee && state.drawing?.tool === 'select') {
-                        finalizeMarqueeSelection(world);
-                        return;
-                }
-                if (state.drawing) {
-                        if (state.drawing.tool === 'pen') {
-                                finalizeStroke(state.drawing);
-                        } else {
-                                completeDrawing(world, state.drawing);
-                        }
-                        state.drawing = null;
-                }
-        });
-
-        canvas.addEventListener('mouseleave', () => {
-                if (state.pan.active) {
-                        state.pan = { active: false, origin: null, startOffset: null, button: null };
-                        setStatus(status, 'Ready');
-                }
-                if (state.selection && state.selection.dragging) {
-                        state.selection.dragging = false;
-                }
-                state.drawing = null;
-                state.marquee = null;
-        });
-
-        canvas.addEventListener('dblclick', (e) => {
-                if (!state.board) return;
-                const world = toWorld(e, canvas, state);
-                const note = renderer.hitTest(world)?.item;
-                const causalNode = renderer.hitCausalNode(world);
-                const linkHit = renderer.hitCausalLink(world);
-                if (causalNode) {
-                        editors.openCausalNodeEditor(causalNode, canvas);
-                        return;
-                }
-                if (linkHit?.link) {
-                        editors.openCausalLinkEditor(linkHit.link, linkHit.midpoint, canvas);
-                        return;
-                }
-                if (note?.content !== undefined && note.width !== undefined) {
-                        editors.openNoteEditor(note.position, note.content, note, true, () => {
-                                boardApi.syncBoard();
-                                renderer.render();
-                        }, canvas);
-                        return;
-                }
-
-                const textHit = renderer.hitTest(world);
-                if (textHit?.type === 'text') {
-                        editors.openTextEditor(textHit.item.position, textHit.item.content, textHit.item, true, () => {
-                                boardApi.syncBoard();
-                                renderer.render();
-                        }, canvas);
-                }
-        });
-
-        canvas.addEventListener('wheel', (e) => {
-                e.preventDefault();
-                const rect = canvas.getBoundingClientRect();
-                const screen = { x: e.clientX - rect.left, y: e.clientY - rect.top };
-                const worldBefore = screenToWorld(screen, state);
-                const nextScale = clamp(state.scale * (e.deltaY > 0 ? 0.9 : 1.1), 0.25, 4);
-                state.scale = nextScale;
-                state.offset = {
-                        x: screen.x - worldBefore.x * state.scale,
-                        y: screen.y - worldBefore.y * state.scale,
-                };
-                renderer.render();
-        }, { passive: false });
-
-        window.addEventListener('keydown', (evt) => {
-                if (['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName)) return;
-                if ((evt.key === 'Delete' || evt.key === 'Backspace') && state.selection?.items?.length) {
-                        evt.preventDefault();
-                        deleteSelection();
-                }
-                if (evt.key === 'Escape' && state.pendingTemplate) {
-                        state.pendingTemplate = null;
-                        setStatus(status, 'Template placement cancelled');
-                }
-        });
-
-        async function finalizeMarqueeSelection(world) {
-                if (!state.marquee) return;
-                state.marquee.current = world;
-                const hits = collectHitsInMarquee();
-                state.marquee = null;
-                state.drawing = null;
-                if (hits.length) {
-                        startSelectionFromHits(state, hits, world, renderer);
-                } else {
-                        clearSelection(state);
-                }
-                renderer.render();
-        }
-
-        function collectHitsInMarquee() {
-                const start = state.marquee.start;
-                const end = state.marquee.current;
-                const rect = {
-                        x1: Math.min(start.x, end.x),
-                        y1: Math.min(start.y, end.y),
-                        x2: Math.max(start.x, end.x),
-                        y2: Math.max(start.y, end.y),
-                };
-                const hits = [];
-                state.board.shapes.forEach((shape) => {
-                        const bounds = renderer.getBounds({ type: 'shape', item: shape });
-                        if (bounds && intersects(bounds, rect)) hits.push({ type: 'shape', item: shape });
-                });
-                state.board.notes.forEach((note) => {
-                        const bounds = renderer.getBounds({ type: 'note', item: note });
-                        if (bounds && intersects(bounds, rect)) hits.push({ type: 'note', item: note });
-                });
-                state.board.texts.forEach((text) => {
-                        const bounds = renderer.getBounds({ type: 'text', item: text });
-                        if (bounds && intersects(bounds, rect)) hits.push({ type: 'text', item: text });
-                });
-                return hits;
-        }
-
-        function intersects(bounds, rect) {
-                return bounds.x <= rect.x2 && bounds.x + bounds.width >= rect.x1 && bounds.y <= rect.y2 && bounds.y + bounds.height >= rect.y1;
-        }
-
-        function detectExistingHandle(screen, world) {
-                if (!state.selection || !state.selection.items?.length) return false;
-                const bounds = renderer.getSelectionBounds(state.selection);
-                if (!bounds) return false;
-                const handles = renderer.handlePositions(bounds);
-                const hitHandle = handles.find((h) => Math.abs(h.x - screen.x) <= 10 && Math.abs(h.y - screen.y) <= 10);
-                if (hitHandle) {
-                        startSelectionFromHits(state, state.selection.items.map((i) => i.hit), world, renderer);
-                        state.selection.handle = hitHandle.name;
-                        state.selection.mode = 'resize';
-                        state.selection.dragging = true;
-                        renderer.render();
-                        return true;
-                }
-                if (world.x >= bounds.x && world.x <= bounds.x + bounds.width && world.y >= bounds.y && world.y <= bounds.y + bounds.height) {
-                        startSelectionFromHits(state, state.selection.items.map((i) => i.hit), world, renderer);
-                        state.selection.mode = 'move';
-                        state.selection.dragging = true;
-                        renderer.render();
-                        return true;
-                }
-                return false;
-        }
-
-        function handleComment(world) {
-                const target = renderer.hitComment(world);
-                if (target) {
-                        editors.openCommentEditor(target.position, target, canvas);
-                        return;
-                }
-                editors.openCommentEditor(world, null, canvas);
-        }
-
-        function startStroke(point) {
-                return {
-                        tool: 'pen',
-                        points: [point],
-                        color: state.myCursor.color,
-                        width: state.strokeSettings.width,
-                        smoothing: state.strokeSettings.smoothing,
-                };
-        }
-
-        function recordStrokePoint(drawing, point) {
-                if (!drawing.points || drawing.points.length === 0) return;
-                const last = drawing.points[drawing.points.length - 1];
-                const smoothing = clamp(isNaN(drawing.smoothing) ? 0.5 : drawing.smoothing, 0, 1);
-                const blended = {
-                        x: last.x + (point.x - last.x) * (1 - smoothing),
-                        y: last.y + (point.y - last.y) * (1 - smoothing),
-                };
-                drawing.points.push(blended);
-        }
-
-        function finalizeStroke(drawing) {
-                if (!drawing || drawing.points.length < 2) return;
-                state.board.strokes.push({
-                        id: uid(),
-                        points: drawing.points.slice(),
-                        color: drawing.color || state.myCursor.color,
-                        width: drawing.width || state.strokeSettings.width,
-                        smoothing: drawing.smoothing,
-                });
-                renderer.render();
-                boardApi.syncBoard();
-        }
-
-        function completeDrawing(world, drawing) {
-                const tool = drawing?.tool || state.tool;
-                switch (tool) {
-                case 'rectangle':
-                        state.board.shapes.push(makeShape('rectangle', drawing.start, world));
-                        break;
-                case 'ellipse':
-                        state.board.shapes.push(makeShape('ellipse', drawing.start, world));
-                        break;
-                case 'connector':
-                        state.board.connectors.push(makeConnector(drawing.start, world));
-                        break;
-                case 'causal-link': {
-                        const endNode = renderer.hitCausalNode(world);
-                        if (drawing.startNodeId && endNode?.id && drawing.startNodeId !== endNode.id) {
-                                const link = makeCausalLink(drawing.startNodeId, endNode.id);
-                                state.board.causalLinks.push(link);
-                                renderer.render();
-                                editors.openCausalLinkEditor(link, renderer.getCausalLinkMidpoint(link), canvas);
-                                boardApi.syncBoard();
-                        }
-                        return;
-                }
-                case 'text': {
-                        editors.openTextEditor(world, '', null, false, () => {
-                                renderer.render();
-                                boardApi.syncBoard();
-                        }, canvas);
-                        renderer.render();
-                        return;
-                }
-                case 'note': {
-                        editors.openNoteEditor(world, '', null, false, () => {
-                                renderer.render();
-                                boardApi.syncBoard();
-                        }, canvas);
-                        renderer.render();
-                        return;
-                }
-                case 'select':
-                        return;
-                }
-                renderer.render();
-                boardApi.syncBoard();
-        }
-
-        function makeShape(kind, start, end) {
-                return {
-                        id: uid(),
-                        kind,
-                        points: [start, end],
-                        color: kind === 'ellipse' ? '#a78bfa' : '#22d3ee',
-                        strokeWidth: 2,
-                };
-        }
-
-        function makeConnector(start, end) {
-                return {
-                        id: uid(),
-                        from: renderer.snapToAnchor(start),
-                        to: renderer.snapToAnchor(end),
-                        color: state.connectorDefaults?.color || '#fbbf24',
-                        width: state.connectorDefaults?.width || 2,
-                        label: state.connectorDefaults?.label || 'flow',
-                };
-        }
-
-        function makeCausalNode(position) {
-                return {
-                        id: uid(),
-                        position,
-                        label: 'Variable',
-                        kind: 'variable',
-                        color: editors.colorForKind('variable'),
-                };
-        }
-
-        function makeCausalLink(from, to) {
-                return {
-                        id: uid(),
-                        from,
-                        to,
-                        polarity: 'positive',
-                        weight: 1,
-                        label: 'influences',
-                };
-        }
-
-        function deleteSelection() {
-                if (!state.selection?.items?.length) return;
-                const ids = new Set(state.selection.items.map((item) => item.hit.item.id));
-                state.board.shapes = state.board.shapes.filter((shape) => !ids.has(shape.id));
-                state.board.notes = state.board.notes.filter((note) => !ids.has(note.id));
-                state.board.texts = state.board.texts.filter((text) => !ids.has(text.id));
-                state.board.causalNodes = state.board.causalNodes.filter((node) => !ids.has(node.id));
-                clearSelection(state);
-                renderer.render();
-                boardApi.syncBoard();
-        }
-
-        function setupTemplatePicker() {
-                if (!templateSelect || !templateInsertBtn || !templateDescription) return;
-                templates.forEach((t) => {
-                        const option = document.createElement('option');
-                        option.value = t.id;
-                        option.textContent = t.name;
-                        templateSelect.appendChild(option);
-                });
-                if (templates.length) {
-                        templateSelect.value = templates[0].id;
-                        updateTemplateDescription(templates[0].id);
-                }
-
-                templateSelect.addEventListener('change', (evt) => {
-                        updateTemplateDescription(evt.target.value);
-                });
-
-                templateInsertBtn.addEventListener('click', () => {
-                        const template = templates.find((t) => t.id === templateSelect.value);
-                        if (!template) return;
-                        state.pendingTemplate = template;
-                        setStatus(status, `Placement armed: ${template.name}. Click the board to drop it.`);
-                });
-        }
-
-        function updateTemplateDescription(templateId) {
-                const template = templates.find((t) => t.id === templateId);
-                if (!template) return;
-                templateDescription.textContent = template.description;
-        }
-
-        function placeTemplate(world) {
-                if (!state.board || !state.pendingTemplate) return;
-                const result = instantiateTemplate(state.pendingTemplate, world);
-                state.pendingTemplate = null;
-                if (!result) {
-                        setStatus(status, 'Could not create template');
-                        return;
-                }
-                state.board.shapes.push(...result.shapes);
-                state.board.notes.push(...result.notes);
-                state.board.texts.push(...result.texts);
-                state.board.connectors.push(...result.connectors);
-                state.board.comments.push(...result.comments);
-                renderer.render();
-                boardApi.syncBoard();
-                setStatus(status, `${result.name} added`);
-        }
-
-        function handleBoardChange() {
-                state.layout.causalPositions = null;
-                refreshGroupingMetadata(state);
-                recomputeStatusViews(state);
-                updateGroupSuggestions();
-        }
-
-        function applyAutoLayout() {
-                if (!state.board?.causalNodes?.length) {
-                        setStatus(status, 'Add causal nodes to run layout');
-                        return;
-                }
-                const result = computeCausalLayout(state.board.causalNodes, state.board.causalLinks, {
-                        groups: state.grouping.causalGroups,
-                });
-                state.layout.causalPositions = result.positions;
-                state.grouping.causalGroups = result.groups;
-                state.board.causalNodes.forEach((node) => {
-                        const pos = result.positions.get(node.id) || result.positions?.[node.id];
-                        if (pos) node.position = { ...pos };
-                });
-                updateGroupSuggestions();
-                renderer.render(meta);
-                boardApi.syncBoard();
-                setStatus(status, 'Auto layout applied');
-        }
-
-        function assignGroupTag(tag) {
-                const trimmed = tag.trim();
-                const targets = (state.selection?.items || []).filter((item) => item.hit.type === 'causal-node');
-                if (!targets.length) {
-                        setStatus(status, 'Select one or more causal nodes to group');
-                        return;
-                }
-                targets.forEach((item) => {
-                        item.hit.item.group = trimmed || null;
-                });
-                refreshGroupingMetadata(state);
-                updateGroupSuggestions();
-                renderer.render(meta);
-                boardApi.syncBoard();
-                setStatus(status, trimmed ? `Grouped nodes under "${trimmed}"` : 'Cleared node grouping');
-        }
-
-        function updateGroupSuggestions() {
-                if (!groupSuggestions) return;
-                groupSuggestions.innerHTML = '';
-                state.grouping.causalGroups.forEach((group) => {
-                        const option = document.createElement('option');
-                        option.value = group;
-                        groupSuggestions.appendChild(option);
-                });
-        }
-
         function setupSettingsPanel() {
                 if (!settingsModal || !settingsForm || !openSettingsBtn) return;
 
                 const closeButtons = [closeSettingsBtn, closeSettingsFooterBtn, settingsDismiss];
-                closeButtons.filter(Boolean).forEach((btn) =>
-                        btn.addEventListener('click', () => hideSettingsModal()),
-                );
+                closeButtons.filter(Boolean).forEach((btn) => btn.addEventListener('click', () => hideSettingsModal()));
 
                 openSettingsBtn.addEventListener('click', () => {
                         populateSettingsForm();
@@ -690,7 +202,4 @@ import { computeCausalLayout } from './layout.js';
                         : '';
                 settingsSummary.textContent = `Cursor: ${state.myCursor.label} (${state.myCursor.color}) · Pen: ${state.strokeSettings.width}px, smoothing ${state.strokeSettings.smoothing.toFixed(2)} · Connector: ${state.connectorDefaults.width}px ${state.connectorDefaults.color}${connectorLabel} · Snap: ${snap ? 'on' : 'off'} @ ${state.snapSettings.tolerance}px`;
         }
-
-        resizeCanvas();
-        boardApi.loadBoard();
 })();

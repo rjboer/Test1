@@ -30,12 +30,53 @@ body {
         background: linear-gradient(90deg, #0f172a, #0b1224);
         border-bottom: 1px solid #1f2937;
         gap: 12px;
+        flex-wrap: wrap;
+}
+
+.topbar-left {
+        display: flex;
+        align-items: center;
+        gap: 12px;
 }
 
 .brand {
         font-weight: 700;
         letter-spacing: 0.08em;
         color: var(--accent);
+}
+
+.mode-toggle {
+        display: flex;
+        gap: 8px;
+}
+
+.mode-toggle button {
+        background: #0b1224;
+        border: 1px solid #1f2937;
+        color: var(--text);
+        padding: 8px 12px;
+        border-radius: 999px;
+        cursor: pointer;
+        transition: background 0.2s ease, color 0.2s ease, border 0.2s ease;
+}
+
+.mode-toggle button.active {
+        background: var(--accent);
+        color: #0b1224;
+        border-color: var(--accent);
+}
+
+.toolbar-group {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        flex: 1;
+}
+
+.toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
 }
 
 .toolbar button {
@@ -62,6 +103,12 @@ body {
         background: var(--accent);
         color: #0b1224;
         border-color: var(--accent);
+}
+
+.actions {
+        display: flex;
+        align-items: center;
+        gap: 8px;
 }
 
 .actions button {
