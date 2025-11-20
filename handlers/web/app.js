@@ -1,4 +1,4 @@
-import { createInitialState, setStatus, setTool } from './state.js';
+import { createInitialState, refreshGroupingMetadata, setStatus, setTool } from './state.js';
 import { createRenderer } from './rendering.js';
 import { createBoardApi } from './board.js';
 import { createEditors } from './editors.js';
@@ -6,6 +6,7 @@ import { startSelection, startSelectionFromHits, updateSelection, clearSelection
 import { toWorld, screenToWorld, eventToScreen } from './geometry.js';
 import { clamp, uid } from './utils.js';
 import { instantiateTemplate, templates } from './templates.js';
+import { computeCausalLayout } from './layout.js';
 
 (() => {
         const canvas = document.getElementById('board-canvas');
@@ -17,10 +18,14 @@ import { instantiateTemplate, templates } from './templates.js';
         const templateSelect = document.getElementById('template-select');
         const templateInsertBtn = document.getElementById('template-insert');
         const templateDescription = document.getElementById('template-description');
+        const autoLayoutBtn = document.getElementById('auto-layout');
+        const applyGroupBtn = document.getElementById('apply-group');
+        const groupInput = document.getElementById('group-name');
+        const groupSuggestions = document.getElementById('group-suggestions');
         const state = createInitialState(window.initialBoardID);
 
         const renderer = createRenderer(ctx, canvas, state);
-        const boardApi = createBoardApi(state, renderer, (msg) => setStatus(status, msg), meta);
+        const boardApi = createBoardApi(state, renderer, (msg) => setStatus(status, msg), meta, handleBoardChange);
         const editors = createEditors(state, renderer, () => boardApi.syncBoard());
 
         setupTemplatePicker();
@@ -43,6 +48,12 @@ import { instantiateTemplate, templates } from './templates.js';
                 if (!btn) return;
                 setTool(state, btn.dataset.tool, toolbar);
                 setStatus(status, `Tool: ${state.tool}`);
+        });
+
+        autoLayoutBtn?.addEventListener('click', () => applyAutoLayout());
+        applyGroupBtn?.addEventListener('click', () => assignGroupTag(groupInput?.value || ''));
+        groupInput?.addEventListener('keydown', (evt) => {
+                if (evt.key === 'Enter') assignGroupTag(groupInput?.value || '');
         });
 
         deleteBtn.addEventListener('click', () => deleteSelection());
@@ -528,6 +539,59 @@ import { instantiateTemplate, templates } from './templates.js';
                 renderer.render();
                 boardApi.syncBoard();
                 setStatus(status, `${result.name} added`);
+        }
+
+        function handleBoardChange() {
+                state.layout.causalPositions = null;
+                refreshGroupingMetadata(state);
+                updateGroupSuggestions();
+        }
+
+        function applyAutoLayout() {
+                if (!state.board?.causalNodes?.length) {
+                        setStatus(status, 'Add causal nodes to run layout');
+                        return;
+                }
+                const result = computeCausalLayout(state.board.causalNodes, state.board.causalLinks, {
+                        groups: state.grouping.causalGroups,
+                });
+                state.layout.causalPositions = result.positions;
+                state.grouping.causalGroups = result.groups;
+                state.board.causalNodes.forEach((node) => {
+                        const pos = result.positions.get(node.id) || result.positions?.[node.id];
+                        if (pos) node.position = { ...pos };
+                });
+                updateGroupSuggestions();
+                renderer.render(meta);
+                boardApi.syncBoard();
+                setStatus(status, 'Auto layout applied');
+        }
+
+        function assignGroupTag(tag) {
+                const trimmed = tag.trim();
+                const targets = (state.selection?.items || []).filter((item) => item.hit.type === 'causal-node');
+                if (!targets.length) {
+                        setStatus(status, 'Select one or more causal nodes to group');
+                        return;
+                }
+                targets.forEach((item) => {
+                        item.hit.item.group = trimmed || null;
+                });
+                refreshGroupingMetadata(state);
+                updateGroupSuggestions();
+                renderer.render(meta);
+                boardApi.syncBoard();
+                setStatus(status, trimmed ? `Grouped nodes under "${trimmed}"` : 'Cleared node grouping');
+        }
+
+        function updateGroupSuggestions() {
+                if (!groupSuggestions) return;
+                groupSuggestions.innerHTML = '';
+                state.grouping.causalGroups.forEach((group) => {
+                        const option = document.createElement('option');
+                        option.value = group;
+                        groupSuggestions.appendChild(option);
+                });
         }
 
         resizeCanvas();

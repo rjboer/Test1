@@ -22,6 +22,8 @@ export function createInitialState(boardId) {
                 lastCursorSent: 0,
                 strokeSettings: { width: 3, smoothing: 0.45 },
                 pendingTemplate: null,
+                grouping: { causalGroups: [] },
+                layout: { causalPositions: null },
         };
 }
 
@@ -34,4 +36,11 @@ export function setTool(state, tool, toolbarEl) {
         if (toolbarEl) {
                 toolbarEl.querySelectorAll('button').forEach((el) => el.classList.toggle('active', el.dataset.tool === tool));
         }
+}
+
+export function refreshGroupingMetadata(state) {
+        const groups = Array.from(
+                new Set((state.board?.causalNodes || []).map((node) => node.group).filter(Boolean)),
+        ).sort();
+        state.grouping.causalGroups = groups;
 }

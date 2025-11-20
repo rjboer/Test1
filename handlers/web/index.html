@@ -45,6 +45,17 @@
                                         <p class="template-hint">Click the board to drop the chosen template at your cursor.</p>
                                 </div>
                         </div>
+                        <div class="layout-controls">
+                                <h4>Layout</h4>
+                                <button id="auto-layout" type="button">Auto layout causal map</button>
+                                <div class="group-controls">
+                                        <label for="group-name">Assign group or swimlane</label>
+                                        <input id="group-name" list="group-suggestions" placeholder="e.g. Discovery" />
+                                        <datalist id="group-suggestions"></datalist>
+                                        <button id="apply-group" type="button">Apply to selection</button>
+                                        <p class="layout-hint">Select causal nodes, set a group, then apply auto layout.</p>
+                                </div>
+                        </div>
                         <div class="legend">
                                 <h4>Legend</h4>
                                 <ul>

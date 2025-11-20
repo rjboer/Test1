@@ -8,6 +8,7 @@ export function createRenderer(ctx, canvas, state) {
                 ctx.save();
                 ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
                 drawGrid(rect.width, rect.height);
+                applyLayoutPositions();
                 if (!state.board) {
                         ctx.restore();
                         return;
@@ -48,6 +49,17 @@ export function createRenderer(ctx, canvas, state) {
                 }
                 ctx.stroke();
                 ctx.restore();
+        }
+
+        function applyLayoutPositions() {
+                if (!state.board || !state.layout?.causalPositions) return;
+                const positions = state.layout.causalPositions;
+                state.board.causalNodes?.forEach((node) => {
+                        const pos = positions instanceof Map ? positions.get(node.id) : positions?.[node.id];
+                        if (pos) {
+                                node.position = { ...pos };
+                        }
+                });
         }
 
         function drawShape(shape) {
