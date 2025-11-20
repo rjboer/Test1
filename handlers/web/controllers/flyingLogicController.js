@@ -1,6 +1,7 @@
 import { clamp, uid } from '../utils.js';
 import { refreshGroupingMetadata, recomputeStatusViews } from '../state.js';
 import { computeCausalLayout } from '../layout.js';
+import { domainPalette } from '../domainPalette.js';
 
 export function createFlyingLogicController(context, elements) {
         const {
@@ -12,6 +13,7 @@ export function createFlyingLogicController(context, elements) {
                 setTool,
                 setStatus,
                 toWorld,
+                screenToWorld,
                 eventToScreen,
                 startSelection,
                 startSelectionFromHits,
@@ -21,7 +23,7 @@ export function createFlyingLogicController(context, elements) {
                 syncBoard,
         } = context;
 
-        const { toolbar, deleteBtn, autoLayoutBtn, applyGroupBtn, groupInput, groupSuggestions } = elements;
+        const { toolbar, deleteBtn, autoLayoutBtn, applyGroupBtn, groupInput, groupSuggestions, paletteEl } = elements;
 
         let cleanup = [];
 
@@ -43,6 +45,7 @@ export function createFlyingLogicController(context, elements) {
                                 if (evt.key === 'Enter') assignGroupTag(groupInput?.value || '');
                         });
                 }
+                renderPalette();
                 addPointerHandlers();
         }
 
@@ -55,6 +58,96 @@ export function createFlyingLogicController(context, elements) {
                 state.drawing = null;
                 state.marquee = null;
                 state.pan = { active: false, origin: null, startOffset: null, button: null };
+        }
+
+        function renderPalette() {
+                if (!paletteEl) return;
+                paletteEl.innerHTML = '';
+                domainPalette.forEach((category) => {
+                        const section = document.createElement('div');
+                        section.className = 'palette-category';
+
+                        const header = document.createElement('div');
+                        header.className = 'palette-header';
+
+                        const color = document.createElement('div');
+                        color.className = 'palette-color';
+                        color.style.background = category.color;
+
+                        const title = document.createElement('div');
+                        title.className = 'palette-title';
+                        const name = document.createElement('span');
+                        name.textContent = `${category.icon} ${category.label}`;
+                        const hint = document.createElement('span');
+                        hint.textContent = 'Click a block to drop it on the canvas';
+                        title.appendChild(name);
+                        title.appendChild(hint);
+
+                        header.appendChild(color);
+                        header.appendChild(title);
+
+                        const items = document.createElement('div');
+                        items.className = 'palette-items';
+
+                        category.blocks.forEach((block) => {
+                                const btn = document.createElement('button');
+                                btn.type = 'button';
+                                btn.className = 'palette-item';
+
+                                const icon = document.createElement('div');
+                                icon.className = 'palette-icon';
+                                icon.style.background = category.color;
+                                icon.textContent = category.icon;
+
+                                const text = document.createElement('div');
+                                text.className = 'palette-text';
+                                const label = document.createElement('span');
+                                label.className = 'label';
+                                label.textContent = block.label;
+                                const desc = document.createElement('span');
+                                desc.className = 'description';
+                                desc.textContent = block.description;
+
+                                text.appendChild(label);
+                                text.appendChild(desc);
+
+                                btn.appendChild(icon);
+                                btn.appendChild(text);
+                                addListener(btn, 'click', () => createDomainBlock(block, category));
+                                items.appendChild(btn);
+                        });
+
+                        section.appendChild(header);
+                        section.appendChild(items);
+                        paletteEl.appendChild(section);
+                });
+        }
+
+        function createDomainBlock(block, category) {
+                if (!state.board) return;
+                const position = getCenteredWorldPoint();
+                const label = `${category.icon} ${block.label}`;
+                const node = {
+                        id: uid(),
+                        position,
+                        label,
+                        kind: block.id,
+                        color: block.color || category.color,
+                        status: 'unknown',
+                        confidence: 0,
+                };
+                state.board.causalNodes.push(node);
+                recomputeStatusViews(state);
+                render();
+                syncBoard();
+                setStatus(`${block.label} added to ${category.label}`);
+        }
+
+        function getCenteredWorldPoint() {
+                const rect = canvas.getBoundingClientRect();
+                const jitter = () => (Math.random() - 0.5) * 80;
+                const screenPoint = { x: rect.width / 2 + jitter(), y: rect.height / 2 + jitter() };
+                return screenToWorld(screenPoint);
         }
 
         function setupToolbar() {
