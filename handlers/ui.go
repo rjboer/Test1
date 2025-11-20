@@ -39,6 +39,8 @@ func (h *Handler) serveIndex(w http.ResponseWriter, r *http.Request) {
 		BoardID string
 	}{BoardID: board.ID}
 
+	csp := "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; font-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'self'"
+	w.Header().Set("Content-Security-Policy", csp)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := indexTmpl.Execute(w, data); err != nil {
 		http.Error(w, "failed to render page", http.StatusInternalServerError)
