@@ -30,7 +30,7 @@ export function createBoardApi(state, renderer, setStatus, meta, onBoardChange) 
                         notes: board.notes || [],
                         connectors: normalizeConnectors(board.connectors || []),
                         causalNodes: normalizeCausalNodes(board.causalNodes || []),
-                        causalLinks: board.causalLinks || [],
+                        causalLinks: normalizeCausalLinks(board.causalLinks || []),
                         comments: board.comments || [],
                 };
         }
@@ -133,4 +133,18 @@ function normalizeCausalNodes(nodes) {
                 confidence: typeof node.confidence === 'number' ? node.confidence : 0,
                 evidence: node.evidence || [],
         }));
+}
+
+function normalizeCausalLink(link) {
+        const num = Number(link.weight);
+        return {
+                ...link,
+                polarity: link.polarity || 'positive',
+                label: typeof link.label === 'string' ? link.label : '',
+                weight: Number.isFinite(num) ? num : 1,
+        };
+}
+
+function normalizeCausalLinks(links) {
+        return (links || []).map(normalizeCausalLink);
 }

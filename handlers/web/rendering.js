@@ -1,5 +1,6 @@
 import { blend, clamp, distance } from './utils.js';
 import { toScreenPoint } from './geometry.js';
+import { defaultSettings } from './state.js';
 
 export function createRenderer(ctx, canvas, state) {
         function render(meta) {
@@ -705,11 +706,25 @@ export function createRenderer(ctx, canvas, state) {
                 }
         }
 
+        function formatWeight(weight) {
+                if (!Number.isFinite(weight)) return null;
+                const cutoff =
+                        Number(state.settings?.causalWeightScientificCutoff) ||
+                        defaultSettings.causalWeightScientificCutoff;
+                const abs = Math.abs(weight);
+                if (abs > 0 && abs < cutoff) {
+                        return weight.toExponential(2);
+                }
+                const rounded = Math.round(weight * 1000) / 1000;
+                return `${rounded}`;
+        }
+
         function linkLabel(link) {
                 const parts = [];
                 if (link.label) parts.push(link.label);
                 if (link.polarity) parts.push(link.polarity === 'negative' ? '−' : link.polarity === 'neutral' ? '0' : '+');
-                if (typeof link.weight === 'number') parts.push(`w=${link.weight}`);
+                const weight = formatWeight(link.weight);
+                if (weight !== null) parts.push(`w=${weight}`);
                 return parts.join(' ').trim();
         }
 

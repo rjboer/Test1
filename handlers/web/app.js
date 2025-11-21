@@ -178,6 +178,8 @@ import { createFlyingLogicController } from './controllers/flyingLogicController
                 settingsForm.connectorLabel.value = settings.connectorLabel || '';
                 settingsForm.snapToAnchors.checked = state.snapSettings?.enabled !== false;
                 settingsForm.snapTolerance.value = state.snapSettings?.tolerance ?? settings.snapTolerance;
+                settingsForm.causalWeightScientificCutoff.value =
+                        state.settings?.causalWeightScientificCutoff ?? settings.causalWeightScientificCutoff;
         }
 
         function applySettingsFromForm() {
@@ -192,6 +194,9 @@ import { createFlyingLogicController } from './controllers/flyingLogicController
                         connectorLabel: settingsForm.connectorLabel.value,
                         snapToAnchors: settingsForm.snapToAnchors.checked,
                         snapTolerance: Number(settingsForm.snapTolerance.value),
+                        causalWeightScientificCutoff:
+                                Number(settingsForm.causalWeightScientificCutoff.value) ||
+                                defaultSettings.causalWeightScientificCutoff,
                 };
                 applySettings(state, updates);
                 renderer.render(meta);
@@ -206,6 +211,6 @@ import { createFlyingLogicController } from './controllers/flyingLogicController
                 const connectorLabel = state.connectorDefaults?.label
                         ? `, label "${state.connectorDefaults.label}"`
                         : '';
-                settingsSummary.textContent = `Cursor: ${state.myCursor.label} (${state.myCursor.color}) · Pen: ${state.strokeSettings.width}px, smoothing ${state.strokeSettings.smoothing.toFixed(2)} · Connector: ${state.connectorDefaults.width}px ${state.connectorDefaults.color}${connectorLabel} · Snap: ${snap ? 'on' : 'off'} @ ${state.snapSettings.tolerance}px`;
+                settingsSummary.textContent = `Cursor: ${state.myCursor.label} (${state.myCursor.color}) · Pen: ${state.strokeSettings.width}px, smoothing ${state.strokeSettings.smoothing.toFixed(2)} · Connector: ${state.connectorDefaults.width}px ${state.connectorDefaults.color}${connectorLabel} · Snap: ${snap ? 'on' : 'off'} @ ${state.snapSettings.tolerance}px · Weight cutoff: ${state.settings?.causalWeightScientificCutoff}`;
         }
 })();

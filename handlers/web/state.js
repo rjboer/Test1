@@ -10,6 +10,7 @@ export const defaultSettings = {
         connectorLabel: 'flow',
         snapToAnchors: true,
         snapTolerance: 32,
+        causalWeightScientificCutoff: 0.001,
 };
 
 const SETTINGS_KEY = 'boards-settings';
@@ -80,23 +81,33 @@ export function applySettings(state, settings) {
                 ...(state.settings || {}),
                 ...settings,
         };
-        state.settings = merged;
-        state.myCursor.label = merged.cursorLabel || defaultSettings.cursorLabel;
-        state.myCursor.color = merged.cursorColor || defaultSettings.cursorColor;
+        const cutoff = Number(merged.causalWeightScientificCutoff);
+        const causalWeightScientificCutoff =
+                Number.isFinite(cutoff) && cutoff > 0 ? cutoff : defaultSettings.causalWeightScientificCutoff;
+
+        state.settings = { ...merged, causalWeightScientificCutoff };
+        state.myCursor.label = state.settings.cursorLabel || defaultSettings.cursorLabel;
+        state.myCursor.color = state.settings.cursorColor || defaultSettings.cursorColor;
         state.strokeSettings = {
-                width: Math.max(1, Number(merged.strokeWidth) || defaultSettings.strokeWidth),
-                smoothing: clamp(isNaN(merged.strokeSmoothing) ? defaultSettings.strokeSmoothing : merged.strokeSmoothing, 0, 1),
+                width: Math.max(1, Number(state.settings.strokeWidth) || defaultSettings.strokeWidth),
+                smoothing: clamp(
+                        isNaN(state.settings.strokeSmoothing)
+                                ? defaultSettings.strokeSmoothing
+                                : state.settings.strokeSmoothing,
+                        0,
+                        1,
+                ),
         };
         state.connectorDefaults = {
-                color: merged.connectorColor || defaultSettings.connectorColor,
-                width: Math.max(1, Number(merged.connectorWidth) || defaultSettings.connectorWidth),
-                label: merged.connectorLabel ?? defaultSettings.connectorLabel,
+                color: state.settings.connectorColor || defaultSettings.connectorColor,
+                width: Math.max(1, Number(state.settings.connectorWidth) || defaultSettings.connectorWidth),
+                label: state.settings.connectorLabel ?? defaultSettings.connectorLabel,
         };
         state.snapSettings = {
-                enabled: merged.snapToAnchors !== false,
-                tolerance: Math.max(0, Number(merged.snapTolerance) || defaultSettings.snapTolerance),
+                enabled: state.settings.snapToAnchors !== false,
+                tolerance: Math.max(0, Number(state.settings.snapTolerance) || defaultSettings.snapTolerance),
         };
-        persistSettings(merged);
+        persistSettings(state.settings);
 }
 
 export function resetSettings(state) {

@@ -360,13 +360,21 @@ export function createEditors(state, renderer, onCommit) {
                 wrapper.appendChild(weightLabel);
 
                 const weight = document.createElement('input');
-                weight.type = 'number';
-                weight.step = '0.1';
-                weight.min = '0';
-                weight.value = typeof link.weight === 'number' ? link.weight : 1;
+                weight.type = 'text';
+                weight.inputMode = 'decimal';
+                const defaultWeight = ensureNumericWeight(link.weight, 1);
+                weight.value = `${defaultWeight}`;
+                weight.placeholder = '1 (any real number)';
                 weight.style.width = '100%';
-                weight.style.marginBottom = '8px';
+                weight.style.marginBottom = '4px';
                 wrapper.appendChild(weight);
+
+                const weightHint = document.createElement('div');
+                weightHint.textContent = 'Accepts positive or negative values; scientific notation allowed';
+                weightHint.style.fontSize = '11px';
+                weightHint.style.color = '#4b5563';
+                weightHint.style.marginBottom = '8px';
+                wrapper.appendChild(weightHint);
 
                 const actions = document.createElement('div');
                 actions.style.display = 'flex';
@@ -384,16 +392,28 @@ export function createEditors(state, renderer, onCommit) {
                 actions.appendChild(save);
                 wrapper.appendChild(actions);
 
+                const validateWeight = () => {
+                        const parsed = parseFloat(weight.value);
+                        const isValid = Number.isFinite(parsed);
+                        weight.setCustomValidity(isValid ? '' : 'Enter a numeric weight');
+                        return parsed;
+                };
+
                 const commit = () => {
                         link.label = labelField.value || '';
                         link.polarity = polarity.value || 'positive';
-                        const parsed = parseFloat(weight.value);
-                        link.weight = Number.isFinite(parsed) ? parsed : 1;
+                        const parsed = validateWeight();
+                        if (!Number.isFinite(parsed)) {
+                                weight.reportValidity();
+                                return;
+                        }
+                        link.weight = parsed;
                         hideEditor();
                         onCommit();
                         renderer.render();
                 };
 
+                weight.addEventListener('input', validateWeight);
                 save.addEventListener('click', commit);
                 cancel.addEventListener('click', () => hideEditor());
 
@@ -446,6 +466,11 @@ export function createEditors(state, renderer, onCommit) {
                         content,
                         type: type || 'comment',
                 };
+        }
+
+        function ensureNumericWeight(value, fallback = 1) {
+                const num = typeof value === 'number' ? value : parseFloat(value);
+                return Number.isFinite(num) ? num : fallback;
         }
 
         return { openTextEditor, openNoteEditor, openCommentEditor, openCausalNodeEditor, openCausalLinkEditor, hideEditor, colorForKind };
