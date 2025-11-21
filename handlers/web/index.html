@@ -41,6 +41,42 @@
                 </div>
                 <div class="status" id="status">Ready</div>
         </header>
+        <section class="ribbon">
+                <div class="ribbon-tabs" role="tablist">
+                        <button
+                                class="ribbon-tab active"
+                                id="domain-palette-tab"
+                                type="button"
+                                role="tab"
+                                aria-selected="true"
+                                aria-controls="domain-palette-panel"
+                        >
+                                Domain Palette
+                        </button>
+                </div>
+                <div class="ribbon-content">
+                        <div
+                                class="ribbon-panel active"
+                                id="domain-palette-panel"
+                                role="tabpanel"
+                                aria-labelledby="domain-palette-tab"
+                        >
+                                <div class="ribbon-group">
+                                        <div class="ribbon-group-header">
+                                                <div class="ribbon-group-title">Domain Palette</div>
+                                                <p class="ribbon-group-subtitle">
+                                                        Pick a category and drop structured blocks for the causal map.
+                                                </p>
+                                        </div>
+                                        <div class="ribbon-group-body">
+                                                <div class="palette ribbon-palette" id="domain-palette">
+                                                        <div class="palette-groups" id="ribbon-palette-groups"></div>
+                                                </div>
+                                        </div>
+                                </div>
+                        </div>
+                </div>
+        </section>
         <main class="layout">
                 <section class="board-area">
                         <canvas id="board-canvas"></canvas>
@@ -51,11 +87,6 @@
                 <aside class="side-panel">
                         <h3>Board details</h3>
                         <div id="board-meta" class="meta"></div>
-                        <div class="palette" id="domain-palette">
-                                <h4>Domain palette</h4>
-                                <p class="palette-hint">Pick a category and drop structured blocks for the causal map.</p>
-                                <div class="palette-groups" id="palette-groups"></div>
-                        </div>
                         <div class="templates" id="template-panel">
                                 <h4>Templates</h4>
                                 <div class="template-picker">

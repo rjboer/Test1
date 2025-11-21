@@ -24,7 +24,7 @@ import { createFlyingLogicController } from './controllers/flyingLogicController
         const templateSelect = document.getElementById('template-select');
         const templateInsertBtn = document.getElementById('template-insert');
         const templateDescription = document.getElementById('template-description');
-        const paletteEl = document.getElementById('palette-groups');
+        const paletteEl = document.getElementById('ribbon-palette-groups');
 
         const autoLayoutBtn = document.getElementById('auto-layout');
         const applyGroupBtn = document.getElementById('apply-group');
