@@ -137,6 +137,17 @@
                                         <label for="snap-tolerance">Snap tolerance (px)</label>
                                         <input id="snap-tolerance" name="snapTolerance" type="number" min="0" step="1" />
                                 </div>
+                                <div class="field">
+                                        <label for="causal-weight-cutoff">Causal weight notation cutoff</label>
+                                        <input
+                                                id="causal-weight-cutoff"
+                                                name="causalWeightScientificCutoff"
+                                                type="number"
+                                                min="0"
+                                                step="0.0001"
+                                        />
+                                        <p class="field-hint">Switch link weights to scientific notation below this absolute value.</p>
+                                </div>
                         </form>
                         <div class="modal-footer">
                                 <div id="settings-summary" class="settings-summary"></div>
