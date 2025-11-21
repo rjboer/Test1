@@ -41,6 +41,8 @@ import { createFlyingLogicController } from './controllers/flyingLogicController
         const settingsSummary = document.getElementById('settings-summary');
 
         const modeButtons = document.querySelectorAll('[data-mode]');
+        const ribbonTabs = document.querySelectorAll('[data-tab]');
+        const tabPanels = document.querySelectorAll('[data-tab-panel]');
         const miroToolbar = document.getElementById('miro-toolbar');
         const causalToolbar = document.getElementById('causal-toolbar');
 
@@ -86,6 +88,7 @@ import { createFlyingLogicController } from './controllers/flyingLogicController
 
         let activeController = null;
 
+        setupRibbonTabs();
         setupModeToggle();
         setupSettingsPanel();
         resizeCanvas();
@@ -96,11 +99,31 @@ import { createFlyingLogicController } from './controllers/flyingLogicController
 
         function setupModeToggle() {
                 modeButtons.forEach((btn) => {
+                        if (btn.dataset.tab) return;
                         btn.addEventListener('click', () => {
                                 const mode = btn.dataset.mode;
                                 activateController(mode);
                         });
                 });
+        }
+
+        function setupRibbonTabs() {
+                if (!ribbonTabs.length || !tabPanels.length) return;
+
+                ribbonTabs.forEach((tab) => {
+                        tab.addEventListener('click', () => {
+                                const tabName = tab.dataset.tab;
+                                setActiveTab(tabName);
+                                if (tab.dataset.mode) {
+                                        activateController(tab.dataset.mode);
+                                }
+                        });
+                });
+
+                const initialTab = document.querySelector('[data-tab].active')?.dataset.tab || ribbonTabs[0]?.dataset.tab;
+                if (initialTab) {
+                        setActiveTab(initialTab);
+                }
         }
 
         function activateController(mode) {
@@ -112,6 +135,20 @@ import { createFlyingLogicController } from './controllers/flyingLogicController
                 miroToolbar?.setAttribute('hidden', mode !== 'miro');
                 causalToolbar?.setAttribute('hidden', mode !== 'causal');
                 activeController?.activate?.();
+        }
+
+        function setActiveTab(tabName) {
+                ribbonTabs.forEach((tab) => {
+                        const isActive = tab.dataset.tab === tabName;
+                        tab.classList.toggle('active', isActive);
+                        tab.setAttribute('aria-selected', isActive ? 'true' : 'false');
+                });
+
+                tabPanels.forEach((panel) => {
+                        const isActive = panel.dataset.tabPanel === tabName;
+                        panel.classList.toggle('active', isActive);
+                        panel.setAttribute('aria-hidden', isActive ? 'false' : 'true');
+                });
         }
 
         function handleBoardChange() {
