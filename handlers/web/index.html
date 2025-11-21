@@ -26,7 +26,7 @@
                                 <div class="command-group">
                                         <div class="group-header">
                                                 <div class="group-title">Boarding</div>
-                                                <div class="group-subtitle">Drawing tools</div>
+                                                <div class="group-subtitle">Diagram tools</div>
                                         </div>
                                         <div class="toolbar" id="miro-toolbar">
                                                 <button data-tool="pan" class="active">Pan</button>
@@ -57,17 +57,26 @@
                                 </div>
                         </div>
                         <div class="tab-panel" data-tab-panel="palette" role="tabpanel" aria-hidden="true">
-                                <div class="command-group">
+                                <div class="command-group narrow">
                                         <div class="group-header">
-                                                <div class="group-title">Domain palette</div>
-                                                <div class="group-subtitle">Guided blocks</div>
+                                                <div class="group-title">Domain Palette</div>
+                                                <div class="group-subtitle">Guided building blocks</div>
                                         </div>
                                         <div class="group-actions column">
                                                 <p class="group-description">
-                                                        Use the side palette to drop structured building blocks for causal maps. Drag a category
-                                                        into the canvas to start laying out your domain language.
+                                                        Drop structured domain objects directly from this Ribbon tab. Select a block to place it in
+                                                        the canvas or drag the category header for quick access.
                                                 </p>
-                                                <p class="group-description">Palette items remain available in the sidebar for quick access.</p>
+                                                <p class="group-description">Palette items are organized by discipline to keep your map consistent.</p>
+                                        </div>
+                                </div>
+                                <div class="command-group palette-panel">
+                                        <div class="group-header">
+                                                <div class="group-title">Palette blocks</div>
+                                                <div class="group-subtitle">Click to drop on the board</div>
+                                        </div>
+                                        <div class="palette ribbon-palette" id="domain-palette">
+                                                <div class="palette-groups" id="ribbon-palette-groups"></div>
                                         </div>
                                 </div>
                         </div>
@@ -83,42 +92,6 @@
                         </div>
                 </div>
         </header>
-        <section class="ribbon">
-                <div class="ribbon-tabs" role="tablist">
-                        <button
-                                class="ribbon-tab active"
-                                id="domain-palette-tab"
-                                type="button"
-                                role="tab"
-                                aria-selected="true"
-                                aria-controls="domain-palette-panel"
-                        >
-                                Domain Palette
-                        </button>
-                </div>
-                <div class="ribbon-content">
-                        <div
-                                class="ribbon-panel active"
-                                id="domain-palette-panel"
-                                role="tabpanel"
-                                aria-labelledby="domain-palette-tab"
-                        >
-                                <div class="ribbon-group">
-                                        <div class="ribbon-group-header">
-                                                <div class="ribbon-group-title">Domain Palette</div>
-                                                <p class="ribbon-group-subtitle">
-                                                        Pick a category and drop structured blocks for the causal map.
-                                                </p>
-                                        </div>
-                                        <div class="ribbon-group-body">
-                                                <div class="palette ribbon-palette" id="domain-palette">
-                                                        <div class="palette-groups" id="ribbon-palette-groups"></div>
-                                                </div>
-                                        </div>
-                                </div>
-                        </div>
-                </div>
-        </section>
         <main class="layout">
                 <section class="board-area">
                         <canvas id="board-canvas"></canvas>
